@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template LaunchAgent for a long-running Claude agent.
+
+  Install:
+    1. Edit the placeholders below ({{...}}).
+    2. Copy to ~/Library/LaunchAgents/com.example.agent.plist
+    3. launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.agent.plist
+
+  Restart:
+    launchctl kickstart -k gui/$(id -u)/com.example.agent
+
+  Stop:
+    launchctl bootout gui/$(id -u)/com.example.agent
+
+  Notes:
+    - User-level (LaunchAgent), not system (LaunchDaemon). The agent needs
+      your user keychain and your user's TCC permissions.
+    - StandardOutPath and StandardErrorPath go to absolute paths. Use
+      ~/.claude/ or /tmp/ — don't use a path that depends on $HOME being
+      expanded at plist-load time, since launchd doesn't always.
+    - Don't rely on ~/.zshrc env. Put secrets in EnvironmentVariables.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>python3</string>
+    <string>{{HOME}}/path/to/scripts/nova-pty-runner.py</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>{{HOME}}</string>
+    <!-- Add MCP-server secrets here -->
+    <!-- <key>TELEGRAM_BOT_TOKEN</key><string>...</string> -->
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+
+  <key>StandardOutPath</key>
+  <string>{{HOME}}/.claude/agent-stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>{{HOME}}/.claude/agent-stderr.log</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+</dict>
+</plist>

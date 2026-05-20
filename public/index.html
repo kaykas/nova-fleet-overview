@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f0">
+<title>Nova Fleet — Architecture overview for engineering teams</title>
+<meta name="description" content="A technical deep-dive on the Nova / Mira agent fleet — process model, MCP wiring, memory architecture, loop+harness pattern, and the scripts an engineering team can adopt to build something similar.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;500;700;900&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bh-white:    #f5f5f0;
+    --bh-white-2:  #ffffff;
+    --bh-black:    #121212;
+    --bh-grey:     #e8e8e8;
+    --bh-grey-2:   #d4d4d0;
+    --bh-grey-3:   #6b6b6b;
+    --bh-red:      #d02028;
+    --bh-blue:     #18549f;
+    --bh-yellow:   #fdb913;
+
+    --shadow-hard:        12px 12px 0 var(--bh-black);
+    --shadow-hard-sm:     6px 6px 0 var(--bh-black);
+    --shadow-hard-red:    8px 8px 0 var(--bh-red);
+    --shadow-hard-blue:   8px 8px 0 var(--bh-blue);
+    --shadow-hard-yellow: 8px 8px 0 var(--bh-yellow);
+
+    --border:  4px solid var(--bh-black);
+    --border-2: 2px solid var(--bh-black);
+
+    --font-display: "Outfit", "Helvetica Neue", Arial, sans-serif;
+    --font-mono:    "Space Grotesk", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; font-size: 16px; }
+  body {
+    background: var(--bh-white);
+    color: var(--bh-black);
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9998; opacity: 0.05;
+    background-image: linear-gradient(90deg, var(--bh-black) 1px, transparent 1px), linear-gradient(var(--bh-black) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  ::selection { background: var(--bh-yellow); color: var(--bh-black); }
+
+  .page { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  @media (max-width: 900px) { .page { grid-template-columns: 1fr; } }
+
+  aside.rail {
+    background: var(--bh-black); color: var(--bh-white); padding: 32px 24px;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: var(--border);
+  }
+  @media (max-width: 900px) { aside.rail { position: static; height: auto; } }
+  aside.rail h1 {
+    font-weight: 900; font-size: 28px; letter-spacing: -0.02em; margin-bottom: 4px; line-height: 1.05;
+  }
+  aside.rail .sub { font-family: var(--font-mono); font-size: 11px; color: var(--bh-yellow); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 36px; }
+  aside.rail nav { font-family: var(--font-mono); font-size: 13px; }
+  aside.rail nav a {
+    display: block; padding: 6px 0; color: var(--bh-white); text-decoration: none; border-bottom: 1px solid #333; transition: color 0.2s, padding 0.2s;
+  }
+  aside.rail nav a:hover { color: var(--bh-yellow); padding-left: 8px; }
+  aside.rail .meta { font-family: var(--font-mono); font-size: 10px; color: var(--bh-grey-3); margin-top: 32px; line-height: 1.5; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  main { padding: 64px 80px; max-width: 1100px; }
+  @media (max-width: 900px) { main { padding: 40px 24px; } }
+
+  section { margin-bottom: 96px; scroll-margin-top: 24px; }
+  section > .num { font-family: var(--font-mono); font-size: 11px; color: var(--bh-red); letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; }
+  section > h2 { font-weight: 900; font-size: 56px; letter-spacing: -0.03em; line-height: 1.0; margin-bottom: 24px; }
+  @media (max-width: 900px) { section > h2 { font-size: 36px; } }
+  section > p.lede { font-size: 19px; font-weight: 300; max-width: 680px; margin-bottom: 32px; }
+  section h3 { font-weight: 700; font-size: 22px; margin-top: 32px; margin-bottom: 12px; letter-spacing: -0.01em; }
+  section h4 { font-weight: 700; font-size: 16px; margin-top: 24px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  section p { margin-bottom: 16px; max-width: 760px; }
+  section ul, section ol { margin-left: 24px; margin-bottom: 16px; max-width: 760px; }
+  section li { margin-bottom: 6px; }
+  section strong { font-weight: 700; }
+
+  code, pre, .mono { font-family: var(--font-mono); }
+  code { background: var(--bh-grey); padding: 1px 6px; border: 1px solid var(--bh-grey-2); font-size: 14px; }
+  pre {
+    background: var(--bh-black); color: var(--bh-white); padding: 20px 24px; margin: 16px 0; font-size: 13px; line-height: 1.55;
+    overflow-x: auto; box-shadow: var(--shadow-hard-sm); border: var(--border-2);
+  }
+  pre code { background: transparent; border: none; padding: 0; color: var(--bh-white); }
+
+  .hero {
+    background: var(--bh-yellow); border: var(--border); padding: 56px 48px; box-shadow: var(--shadow-hard); margin-bottom: 96px;
+  }
+  .hero .kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 16px; }
+  .hero h1 { font-weight: 900; font-size: 80px; letter-spacing: -0.04em; line-height: 0.95; margin-bottom: 16px; }
+  @media (max-width: 900px) { .hero { padding: 36px 24px; } .hero h1 { font-size: 48px; } }
+  .hero .tag { font-size: 22px; font-weight: 300; max-width: 720px; }
+
+  .pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; padding: 4px 10px; background: var(--bh-black); color: var(--bh-yellow); margin-right: 6px; margin-bottom: 4px; }
+  .pill.blue { background: var(--bh-blue); color: var(--bh-white); }
+  .pill.red { background: var(--bh-red); color: var(--bh-white); }
+  .pill.cream { background: var(--bh-white); color: var(--bh-black); border: 1px solid var(--bh-black); }
+
+  .card {
+    background: var(--bh-white-2); border: var(--border-2); padding: 24px; margin: 12px 0; box-shadow: var(--shadow-hard-sm);
+  }
+  .card.red { box-shadow: var(--shadow-hard-red); }
+  .card.blue { box-shadow: var(--shadow-hard-blue); }
+  .card.yellow { box-shadow: var(--shadow-hard-yellow); }
+  .card h4 { margin-top: 0; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
+  @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .ascii { background: var(--bh-black); color: var(--bh-yellow); padding: 24px; font-family: var(--font-mono); font-size: 12px; line-height: 1.4; white-space: pre; overflow-x: auto; box-shadow: var(--shadow-hard-yellow); border: var(--border-2); margin: 24px 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  table th, table td { border: 1px solid var(--bh-black); padding: 8px 12px; text-align: left; vertical-align: top; }
+  table th { background: var(--bh-black); color: var(--bh-yellow); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+  table td.mono { font-family: var(--font-mono); font-size: 12px; }
+
+  .callout { border-left: 6px solid var(--bh-red); background: var(--bh-grey); padding: 16px 20px; margin: 24px 0; font-size: 15px; }
+  .callout.blue { border-left-color: var(--bh-blue); }
+  .callout.yellow { border-left-color: var(--bh-yellow); }
+  .callout strong { display: block; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px; color: var(--bh-red); }
+  .callout.blue strong { color: var(--bh-blue); }
+  .callout.yellow strong { color: var(--bh-yellow-2, #d97706); }
+
+  a { color: var(--bh-blue); text-decoration: underline; }
+  a:hover { color: var(--bh-red); }
+
+  footer { border-top: var(--border); margin-top: 96px; padding-top: 32px; font-family: var(--font-mono); font-size: 12px; color: var(--bh-grey-3); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<aside class="rail">
+  <h1>Nova Fleet</h1>
+  <p class="sub">Architecture overview</p>
+  <nav>
+    <a href="#intro">00 · Intro</a>
+    <a href="#shape">01 · Shape of the fleet</a>
+    <a href="#process">02 · Process model</a>
+    <a href="#mcp">03 · MCP wiring</a>
+    <a href="#memory">04 · Memory architecture</a>
+    <a href="#loops">05 · Loop + harness</a>
+    <a href="#coordination">06 · Coordination</a>
+    <a href="#watchdog">07 · Heartbeat &amp; watchdog</a>
+    <a href="#repo">08 · Companion repo</a>
+    <a href="#adopt">09 · Adopt this</a>
+  </nav>
+  <p class="meta">
+    v1 · 2026-05-20<br>
+    For: Andrew Stone + VM Engineering<br>
+    Author: Nova (Jascha's coding agent)
+  </p>
+</aside>
+
+<main>
+
+  <div class="hero">
+    <div class="kicker">For Andrew Stone + VM Engineering</div>
+    <h1>The Fleet.</h1>
+    <p class="tag">A technical breakdown of how Nova, Mira, and the rest of the fleet actually run — process model, MCP plumbing, memory, loops. Written so an engineer can replicate the parts that are useful, ignore the rest, and not have to reverse-engineer the live system.</p>
+  </div>
+
+  <section id="intro">
+    <div class="num">00 · Intro</div>
+    <h2>Why this exists.</h2>
+    <p class="lede">Nova and Mira are two long-running AI agents that live on the same Mac mini, work alongside each other on Jascha's projects (including VM saleshub), and have been operating in a fairly stable configuration since early 2026. This document explains the shape of that configuration so the VM engineering team can adopt the parts that fit.</p>
+
+    <p>Most of what's interesting here isn't the model. It's the <strong>plumbing around the model</strong>: how a Claude process stays alive across days, how it gets work delivered to it, how it persists state, how two agents on the same machine coordinate, and how the operator notices when something is broken.</p>
+
+    <p>None of this is novel research. It's a particular composition of existing pieces — Claude Code, launchd, MCP, a PTY wrapper, a few shell scripts, a SQLite database, and the file system — that happens to be productive. If you wanted to stand up a similar fleet, you could.</p>
+
+    <div class="callout blue">
+      <strong>What's <em>not</em> here</strong>
+      Anything personal — family, legal, the non-VM project list, Telegram chat IDs, access tokens. This document is bounded to the technical infrastructure VM engineering might find useful. The companion repo follows the same boundary.
+    </div>
+  </section>
+
+  <section id="shape">
+    <div class="num">01 · Shape of the fleet</div>
+    <h2>Three peers, not a tree.</h2>
+    <p class="lede">There is no orchestrator. Nova and Mira are peers. Vellum is a third peer running on a different machine. None of them invokes the others — Jascha is the human courier when handoffs happen.</p>
+
+    <div class="ascii">
+                          ┌──────────────────────────┐
+                          │       Jascha (human)     │
+                          │  Telegram · iMessage · …  │
+                          └────┬─────────────┬───────┘
+                               │             │
+                  ┌────────────┴─┐         ┌─┴────────────┐
+                  │   Mac mini   │         │ Work laptop  │
+                  │              │         │              │
+                  │  ┌────────┐  │         │  ┌────────┐  │
+                  │  │  Nova  │◄─┼─ files ─┼─►│ Vellum │  │
+                  │  └───┬────┘  │         │  └────────┘  │
+                  │      │       │         │              │
+                  │      ▼       │         └──────────────┘
+                  │  ┌────────┐  │
+                  │  │  Mira  │  │
+                  │  └────────┘  │
+                  │              │
+                  │   (sub-agents spawned on demand:   │
+                  │    Ryn / Volt / Wren / Voss …)     │
+                  └──────────────────────────────────┘
+    </div>
+
+    <div class="grid-2">
+      <div class="card yellow">
+        <h4>Nova</h4>
+        <span class="pill">Mac mini</span><span class="pill blue">Claude Opus</span>
+        <p>Long-running coding agent. Primary surface is Telegram. Owns: code production, deployment, multi-file refactors, day-job (Visiting Media) and personal site builds, peer review of Mira's SEO work, briefing rituals.</p>
+      </div>
+      <div class="card yellow">
+        <h4>Mira</h4>
+        <span class="pill">Mac mini</span><span class="pill blue">OpenClaw</span>
+        <p>Long-running ops + research agent. Owns: infrastructure monitoring, YouTube production, CRM data, SEO execution, content publishing, daily-stats jobs. Has its own MCP gateway (openclaw) and its own cron stack.</p>
+      </div>
+      <div class="card yellow">
+        <h4>Vellum</h4>
+        <span class="pill">Laptop</span><span class="pill blue">Codex</span>
+        <p>Deep-work executor on a separate machine. Reads a snapshot of the fleet's memory; writes back via a signed HTTP POST. Useful when a task needs web access or a larger context than is practical to keep warm on the mini.</p>
+      </div>
+      <div class="card yellow">
+        <h4>Sub-agents</h4>
+        <span class="pill">Ephemeral</span>
+        <p>Spawned by Nova or Mira inside their own process for a single task. Named (Ryn / Volt / Voss / Wren / etc.) so the operator can talk about them, but they aren't long-running. They die when the task is done.</p>
+      </div>
+    </div>
+
+    <p>The pattern that matters: <strong>two long-running peers on one host, plus on-demand sub-agents</strong>. Coordination is via files on a shared path, not a message bus. That's load-bearing — see §6.</p>
+  </section>
+
+  <section id="process">
+    <div class="num">02 · Process model</div>
+    <h2>Keeping a Claude process alive for weeks.</h2>
+    <p class="lede">A Claude Code process is a CLI invocation. By default it lives as long as the terminal that launched it. To get a long-running agent you need a supervisor that survives terminal closure, PTY allocation that satisfies Claude's interactive mode, and a clean restart story.</p>
+
+    <h3>Nova's current process tree</h3>
+    <div class="ascii">
+launchd (com.nova.telegram)
+  └─ python3 ~/.claude/nova-pty-runner.py
+       └─ claude --dangerously-skip-permissions
+                 --channels plugin:telegram@claude-plugins-official
+            └─ bun (MCP subprocess: plugin:telegram)
+    </div>
+
+    <h4>Why the layers</h4>
+    <ol>
+      <li><strong>launchd</strong> is the macOS process supervisor. A LaunchAgent plist registers the job under <code>gui/&lt;uid&gt;</code>, which restarts it on crash and survives login/logout. Run as a user-level agent, not a system daemon — these processes need user-keychain access and the same TCC permissions a desktop session has.</li>
+      <li><strong>PTY runner</strong> is a small Python script that allocates a pseudo-terminal, spawns Claude with that PTY as stdin/stdout, and re-pipes events. It exists because Claude's interactive mode wants a real TTY. The earlier shape was <code>tmux</code>; tmux died when the host's tmux server died. PTY runner is decoupled from tmux entirely.</li>
+      <li><strong>Claude CLI</strong> runs Claude with channels enabled. Inbound Telegram messages arrive via the channel; outbound goes through the MCP <code>reply</code> tool.</li>
+      <li><strong>bun (MCP server)</strong> is a child of the Claude process — the Telegram MCP plugin's runtime. If it dies, the Claude process stays alive but the channel goes mute. That's a known failure mode; the watchdog catches it (§7).</li>
+    </ol>
+
+    <h3>Restart command (for reference)</h3>
+    <pre><code># Restart Nova's process tree end-to-end. launchd brings the runner
+# back up, the runner respawns Claude, Claude respawns bun.
+launchctl kickstart -k gui/$(id -u)/com.nova.telegram
+
+# Inspect the live tree
+pgrep -fl nova-pty-runner.py
+pgrep -P $(pgrep -f nova-pty-runner) | xargs -I{} ps -fp {}</code></pre>
+
+    <p>Mira runs a similar pattern but via the OpenClaw harness. Same principle (launchd supervises, sub-process owns the model, MCP servers attach as children).</p>
+
+    <div class="callout">
+      <strong>Failure mode worth knowing</strong>
+      The bun MCP subprocess can die silently while Claude keeps running. Symptom: the agent stops responding on Telegram but logs look normal. Fix: kickstart launchd, which tears down the whole tree. See <code>scripts/nova-restart.sh</code> in the companion repo.
+    </div>
+  </section>
+
+  <section id="mcp">
+    <div class="num">03 · MCP wiring</div>
+    <h2>How tools reach the model.</h2>
+    <p class="lede">Every external system the agents touch — Telegram, Slack, Gmail, Drive, Supabase, Vercel, Fathom, internal queues — is wired as an MCP (Model Context Protocol) server. The agent doesn't talk to APIs directly; it calls tools the MCP server exposes.</p>
+
+    <h3>What MCP gives you</h3>
+    <ul>
+      <li><strong>Single auth boundary per service.</strong> The MCP server holds the credential; the agent gets a tool. If the token rotates, only the MCP server's env changes.</li>
+      <li><strong>Schemas for free.</strong> Each tool declares its JSON schema. Claude validates calls against it. No drift between "what the docs say" and "what the model attempted."</li>
+      <li><strong>Composition.</strong> A single agent can mount many servers. Nova mounts Telegram, Gmail, Drive, Vercel, Supabase, Slack, Fathom, Calendar, and a few internal ones.</li>
+    </ul>
+
+    <h3>Two flavors of MCP server in this fleet</h3>
+    <table>
+      <tr><th>Flavor</th><th>Example</th><th>Runtime</th><th>Auth model</th></tr>
+      <tr><td>Hosted (claude.ai)</td><td class="mono">gmail · drive · slack · supabase · vercel</td><td>Claude.ai infrastructure</td><td>OAuth via Claude account</td></tr>
+      <tr><td>Local plugin</td><td class="mono">plugin:telegram@claude-plugins-official</td><td>bun subprocess on Mac mini</td><td>Bot token + access.json allowlist</td></tr>
+    </table>
+
+    <h3>Telegram channel binding (the one we lean on hardest)</h3>
+    <p>Inbound Telegram messages arrive in the agent's context as <code>&lt;channel source="..." chat_id="..." message_id="..." user="..." ts="..."&gt;</code> blocks. The agent replies via the <code>reply</code> tool, passing <code>chat_id</code> back. Access is managed by a local file (<code>~/.claude/channels/telegram/access.json</code>), never by remote message — that's deliberate to prevent prompt-injection of allowlist changes.</p>
+
+    <div class="callout yellow">
+      <strong>Gotcha</strong>
+      The MCP server runs as a child process of Claude. If you put your bot token in the wrong env file (e.g., <code>~/.zshrc</code> instead of the launchd plist or <code>~/.claude/.mcp.json</code>), the bun subprocess won't see it and the channel never binds. Symptom: agent comes up clean, Telegram drops messages silently. Hour-long debugging session waiting to happen.
+    </div>
+  </section>
+
+  <section id="memory">
+    <div class="num">04 · Memory architecture</div>
+    <h2>What an agent remembers between sessions.</h2>
+    <p class="lede">Claude's context window resets every conversation. To survive across sessions, agents read a memory directory before every turn. The memory is files on disk, indexed by a small synthesizer that prunes bloat.</p>
+
+    <h3>File layout</h3>
+    <pre><code>~/.openclaw/workspace/memory/
+  MEMORY.md                          # hand-curated index (≤150 lines)
+  feedback_*.md                      # behavioral rules learned from corrections
+  project_*.md                       # who/what/why for active initiatives
+  reference_*.md                     # pointers to external systems
+  user_*.md                          # facts about the operator</code></pre>
+
+    <h3>Every memory file is the same shape</h3>
+    <pre><code>---
+name: andrew-stone-no-approval-gate
+description: short relevance hook used to decide whether to load this
+metadata:
+  type: feedback   # user · feedback · project · reference
+---
+
+Rule, fact, or pointer.
+
+**Why:** the reason this matters (often an incident).
+**How to apply:** when this guidance should kick in.
+
+Cross-link other memories: [[other-memory-slug]]</code></pre>
+
+    <h3>Why a flat directory of files works</h3>
+    <ul>
+      <li><strong>Auditable.</strong> Every memory is a git-able markdown file. You can <code>git diff</code> what changed between sessions.</li>
+      <li><strong>Editable by hand.</strong> If the operator notices the agent has a wrong belief, they edit a file.</li>
+      <li><strong>Composable.</strong> Nova and Mira walk each other's memory stores through a symmetric template — same frontmatter, same naming, same <code>[[link]]</code> resolver.</li>
+      <li><strong>Synthesized, not appended.</strong> A nightly job rewrites <code>MEMORY.md</code> from the files; bloat goes to a dated archive. The index never grows monotonically.</li>
+    </ul>
+
+    <p>The alternative — embeddings in a vector DB — is fine for some workloads but expensive for "what behavioral rule did the operator give me yesterday." Files win on auditability and round-tripping with humans.</p>
+
+    <div class="callout blue">
+      <strong>For VM engineering</strong>
+      The companion repo includes <code>scripts/memory-init.sh</code> and a <code>memory/</code> skeleton you can drop into any Claude-Code-based project. Same template Nova uses.
+    </div>
+  </section>
+
+  <section id="loops">
+    <div class="num">05 · Loop + harness</div>
+    <h2>How non-trivial work actually gets done.</h2>
+    <p class="lede">For anything that takes more than one turn, the agent writes a falsifiable assertion, runs an iteration, checks the assertion, decides next step. Three artifacts on disk. Resumable across context resets.</p>
+
+    <h3>The three artifacts</h3>
+    <table>
+      <tr><th>File</th><th>Owner</th><th>Purpose</th></tr>
+      <tr><td class="mono">state.json</td><td>The loop</td><td>Source of truth: what's the next step, what's been done, what's the last failure.</td></tr>
+      <tr><td class="mono">check-iteration.sh</td><td>Human or agent</td><td>Done-check script. Returns 0 if the current iteration passed. Never "looks good" — always greps for the assertion.</td></tr>
+      <tr><td class="mono">run-next-iteration.sh</td><td>Human or agent</td><td>Reads <code>state.json</code>, executes <code>next_step</code> only, updates state, commits.</td></tr>
+    </table>
+
+    <h3>Worked example: the property-hub-loop (saleshub repo)</h3>
+    <p>Andrew already lived through this one. Phase 1 of the Property Hub feature was built as a 12-step loop:</p>
+    <ol>
+      <li><code>state.json</code> tracked <code>next_step</code> (1 → 12), per-step done-check results, and any last failure.</li>
+      <li><code>run-step.sh</code> read state, looked up the step contract in <code>dev-spec.md</code>, and invoked Claude with the step contract as the prompt.</li>
+      <li><code>handoffs/STEP-N.md</code> were written at the end of each iteration so a fresh agent context could pick up cleanly.</li>
+      <li>The done-check for each step was real: schema validation, <code>curl + grep</code>, type-check exit code, etc. Never "looks good."</li>
+    </ol>
+
+    <p>Once Phase 1 shipped, the build-harness loop closed (the artifacts were deleted last week per Andrew's review). The B9 operational loop — weekly GSC + GA4 ingest, research subagent, safe-changes applied, audit log — is Phase 4 work and will be built as scheduled-job infrastructure rather than a JSON file in the repo.</p>
+
+    <div class="callout">
+      <strong>Two different loops, often confused</strong>
+      <em>Build harness</em> = transient, ships the feature, deleted when done. <em>Operational loop</em> = production scheduled job, runs forever. Same loop+harness <em>pattern</em>, different lifecycle.
+    </div>
+
+    <h3>Why this is worth adopting</h3>
+    <ul>
+      <li>Multi-iteration work survives context resets. The agent that finishes step 7 doesn't have to be the agent that started step 1.</li>
+      <li>Falsifiable done-checks force you to write the assertion before you write the code. That's the whole TDD thing dressed as a shell script.</li>
+      <li>One commit per step → readable <code>git log</code>, easy rollback, easy review.</li>
+    </ul>
+  </section>
+
+  <section id="coordination">
+    <div class="num">06 · Coordination</div>
+    <h2>Two agents on one host, no message bus.</h2>
+    <p class="lede">Nova and Mira don't call each other. They share a filesystem and the human operator. That's it. Surprisingly robust for the work they do together.</p>
+
+    <h3>Shared paths</h3>
+    <pre><code>~/.openclaw/workspace/
+  memory/                            # symmetric memory store (both agents walk it)
+  handoff-YYYY-MM-DD-{from}-to-{to}.md   # file-based async handoffs
+  hermes-fleet-improver/             # shared nightly improvement pipeline
+  intelligence/                      # shared data: SEO, monitoring, etc.</code></pre>
+
+    <h3>How a handoff looks in practice</h3>
+    <ol>
+      <li>Mira finishes a YouTube production batch. Writes a handoff file naming what shipped and what's open.</li>
+      <li>Operator sees the handoff (via daily digest) and routes the next move to Nova.</li>
+      <li>Nova reads the handoff, picks up the open thread, writes its own response handoff when done.</li>
+    </ol>
+
+    <p>No locks. No queues. No retry semantics. Two cooperating peers writing files in a shared directory.</p>
+
+    <p>The thing that makes this work is that the <strong>operator is in the loop</strong>. If the operator weren't routing, you'd need real coordination primitives. Because the operator routes, the agents can stay simple.</p>
+
+    <div class="callout blue">
+      <strong>For VM engineering</strong>
+      If you wanted to add a third agent to this pattern, you'd add a directory and a memory namespace. You wouldn't add a message bus. Stay flat for as long as it stays useful.
+    </div>
+  </section>
+
+  <section id="watchdog">
+    <div class="num">07 · Heartbeat &amp; watchdog</div>
+    <h2>Noticing when the agent is broken.</h2>
+    <p class="lede">Long-running agents fail in quiet ways. The MCP subprocess dies but the parent keeps running. The model returns text to the terminal instead of Telegram. State drifts. You need an explicit liveness signal and an explicit watchdog.</p>
+
+    <h3>The pattern</h3>
+    <ol>
+      <li><strong>Heartbeat stamp.</strong> Every time the agent replies on Telegram, it runs <code>date +%s &gt; ~/.claude/nova-telegram-last-msg.txt</code>. The PTY runner also stamps on detected output as a safety net.</li>
+      <li><strong>Watchdog cron.</strong> A separate process polls the stamp file. If the timestamp is older than threshold AND there's been an inbound message since the last reply, it fires.</li>
+      <li><strong>Watchdog action.</strong> First action is a Telegram alert to the operator. Restart is operator-initiated, not automatic — auto-restarting masks the root cause.</li>
+    </ol>
+
+    <h3>What we count as resource pressure</h3>
+    <p>SIGTERM clusters on this host have historically tracked process count. The current contracts (open as of last review):</p>
+    <ul>
+      <li>Pull <code>ps aux | wc -l</code> at every SIGTERM event going forward.</li>
+      <li>Audit and prune orphaned UID-501 processes (the user's UID).</li>
+      <li>Sub-agent spawn gate: halt new sub-agent spawns when process count crosses threshold (TBD — baseline still being measured).</li>
+    </ul>
+
+    <p>None of this is rocket science. The point is that you write down "how do I notice when this is broken" as code, not as a vibe.</p>
+  </section>
+
+  <section id="repo">
+    <div class="num">08 · Companion repo</div>
+    <h2>What's in the GitHub repo.</h2>
+    <p class="lede">A scaffold an engineer can clone to start building something similar. Not the live Nova — the live Nova has personal data, project lists, and credentials that don't belong in a public repo. Just the patterns.</p>
+
+    <h3>Tree</h3>
+    <pre><code>nova-fleet-overview/
+├── README.md                         # this document, in markdown
+├── public/index.html                 # the HTML you're reading
+├── vercel.json                       # static-site deploy config
+│
+├── scripts/
+│   ├── nova-pty-runner.py            # the PTY supervisor (sanitized)
+│   ├── nova-restart.sh               # launchctl kickstart pattern
+│   ├── memory-init.sh                # drop a memory skeleton into a project
+│   └── heartbeat-watchdog.sh         # the watchdog pattern
+│
+├── docs/
+│   ├── process-model.md              # §2 in long form
+│   ├── memory-template.md            # canonical memory frontmatter
+│   ├── loop-harness-pattern.md       # §5 in long form
+│   └── coordination.md               # §6 in long form
+│
+├── .claude/
+│   └── skills/
+│       └── loop-harness/
+│           └── SKILL.md              # invocable skill for the loop+harness pattern
+│
+├── examples/
+│   ├── launchd-plist/
+│   │   └── com.example.agent.plist   # template LaunchAgent
+│   └── memory/
+│       ├── MEMORY.md                 # index template
+│       ├── feedback_example.md       # one of each frontmatter type
+│       ├── project_example.md
+│       └── reference_example.md
+└── .gitignore</code></pre>
+
+    <p>None of the scripts contain credentials or chat IDs. The PTY runner is sanitized to its essential pattern. The memory examples are made-up.</p>
+
+    <p>Drop the repo URL into a Claude Code session and ask it to set up a fleet-pattern agent in a new directory. It should be enough.</p>
+  </section>
+
+  <section id="adopt">
+    <div class="num">09 · Adopt this</div>
+    <h2>What's actually worth lifting.</h2>
+    <p class="lede">Not all of it. Adopt the parts that map to problems you have.</p>
+
+    <div class="grid-2">
+      <div class="card blue">
+        <h4>Worth adopting</h4>
+        <ul>
+          <li><strong>The loop+harness pattern.</strong> Universal. Doesn't require Claude — works with any agent or even a human iterating.</li>
+          <li><strong>File-based memory with synthesizer.</strong> Cheap, auditable, round-trips with humans.</li>
+          <li><strong>launchd + PTY for long-running agents.</strong> Mac-specific but conceptually portable (systemd + pty on Linux).</li>
+          <li><strong>Heartbeat + watchdog discipline.</strong> Cheap insurance against quiet failures.</li>
+        </ul>
+      </div>
+      <div class="card red">
+        <h4>Probably not worth lifting</h4>
+        <ul>
+          <li><strong>Two peer agents on one host.</strong> Only makes sense if you have two distinct workload personalities and a single human operator. Otherwise it's complexity for its own sake.</li>
+          <li><strong>OpenClaw gateway (Mira's side).</strong> Useful for our shape, more than VM eng needs.</li>
+          <li><strong>The agent buddies Telegram group.</strong> Operator UX for our specific cadence. You'd build your own.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Smallest valuable adoption</h3>
+    <ol>
+      <li>Pick one engineering task that benefits from multi-iteration work (a migration, a long-tail content port, a per-property sweep).</li>
+      <li>Write a <code>state.json</code>, a <code>check-iteration.sh</code>, and a <code>run-next-iteration.sh</code> for it.</li>
+      <li>Write a falsifiable done-check for each step.</li>
+      <li>Run it. Notice that the agent (or you) can resume after any interruption without re-deriving where you were.</li>
+      <li>Decide whether the rest of the fleet pattern is worth adopting.</li>
+    </ol>
+
+    <p>If you do want to adopt more — the companion repo is the place to start, and Nova is available for pairing on Slack.</p>
+  </section>
+
+  <footer>
+    Nova Fleet · v1 · 2026-05-20 · Built for VM Engineering · Source on GitHub
+  </footer>
+
+</main>
+</div>
+</body>
+</html>
