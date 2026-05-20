@@ -192,7 +192,107 @@ for the invocable form.
 
 Same loop+harness *pattern*, different lifecycle.
 
-## 6. Coordination
+## 6. Hermes — nightly fleet improver
+
+Hermes is the cron-driven pipeline that runs while everyone sleeps. It reads
+what the fleet did during the day, drafts what to surface next, and leaves
+each agent a curated brief to start tomorrow with.
+
+Pipeline shape:
+
+```
+activity-aggregator   reads logs, receipts, git, message buffer
+        │
+        ▼
+planner               turns activity into proposed work items
+        │
+        ▼
+contract-creator      writes each work item as a falsifiable contract
+        │
+        ▼
+executor              runs contracts that don't need human approval
+        │
+        ▼
+qa-verifier+curator   grades outputs, files acceptance, archives misses
+        │
+        ▼
+preflight-generator   writes per-agent next-session briefings
+```
+
+What lands on disk each night:
+
+| Artifact                     | Purpose                                         |
+|------------------------------|-------------------------------------------------|
+| `nova-queue.md`              | Backlog of contracts waiting for Nova to claim  |
+| `contracts/*.json`           | One file per work item, falsifiable success     |
+| `plans/*.md`                 | Longer-form plans (promoted to contracts later) |
+| `preflight-{agent}.md`       | Next-session briefing injected on session start |
+| `deltas/`, `receipts/`       | Audit trail                                     |
+
+Why a pipeline and not a single agent:
+- **Composable.** Each stage is a small script with a single responsibility.
+- **Restartable.** Any stage can re-run on its inputs.
+- **Watchable.** Watchdogs run between stages (`stall-watchdog.py`,
+  `mira-watchdog.py`, etc.) and catch problems Hermes itself can't see.
+- **Cron-friendly.** Stages run on independent schedules — activity
+  aggregation every 15 minutes, full planner nightly, preflight at 5am.
+
+The acceptance gate: contracts the executor can't safely run alone (touching
+shared state, spending money, anything novel) land in an approval queue.
+The operator approves or rejects from the HTML brain (next section).
+
+**Portable pattern:** even without agents, a daily "read what changed in
+your repos + what's open in your tracker + what merged that might affect you"
+cron is a useful version of the same idea. Hermes is just that, expanded.
+
+## 7. HTML brain — the operator's window
+
+Everything Hermes produces is rendered to HTML at a private auth-gated site
+(`mira-artifacts`). The operator opens it to see fleet state, approve or
+reject contracts, read EOD reports, and reference the canonical design system.
+
+What lives there:
+
+| Surface                  | What it shows                                       |
+|--------------------------|-----------------------------------------------------|
+| `/index.html`            | Landing — index of every artifact emitted today     |
+| `/dashboard/`            | Live fleet dashboard                                |
+| `/eod/{date}/`           | End-of-day reports                                  |
+| `/fleet-{date}.html`     | Daily fleet snapshot                                |
+| `/briefs/`               | Long-form analysis (case briefs, marketing, etc.)   |
+| `/hermes/`               | Hermes pipeline outputs                             |
+| `/design-system.html`    | Canonical design system reference                   |
+| `/api/approve`           | Bearer-auth approve/reject endpoint                 |
+| `/api/health`            | Public health check (no auth)                       |
+| `/api/submit`            | Bearer-auth endpoint for off-host content drops     |
+
+How approvals work:
+
+1. Hermes drops a contract into the approval queue (card in the dashboard).
+2. Operator opens the site, clicks Approve or Reject.
+3. Edge function validates a bearer token, POSTs the decision to the fleet
+   decision tunnel.
+4. Next executor cron picks up approved contracts and runs them.
+
+Auth model: Edge Middleware checks a key in the query string on first visit,
+sets an HTTP-only cookie good for 90 days, redirects to a clean URL.
+`/api/health` is intentionally public. The mutating endpoints require a
+bearer token (separate from the cookie).
+
+How content gets there:
+- **Git push** — agent renders HTML, commits, pushes; Vercel auto-deploys.
+  This is the path for anything we want a diff-able history of.
+- **Direct API submit** — off-host agents POST proposed content to
+  `/api/submit`; lands in a proposals branch for review.
+- **One-shot ephemeral** — `vercel --prod` from the project dir for
+  artifacts we don't want in git history.
+
+**Portable pattern:** static-site deploy + edge auth + nightly cron rendering
+the day's state to HTML + git push. No SaaS. No shared backend. Costs
+roughly nothing per month. Add edge auth when the data sensitivity justifies
+it; start public until then.
+
+## 8. Coordination
 
 Two agents on one host, no message bus. Shared filesystem, file-based async
 handoffs, human operator as the routing layer.
@@ -211,7 +311,7 @@ removed the operator you'd need real coordination primitives.
 For a third agent: add a directory and a memory namespace. Don't add a
 message bus. Stay flat for as long as it stays useful.
 
-## 7. Heartbeat & watchdog
+## 9. Heartbeat & watchdog
 
 Long-running agents fail in quiet ways. The MCP subprocess dies but the parent
 keeps running; the model returns text to the terminal instead of Telegram;
@@ -229,7 +329,7 @@ The pattern:
 
 See `scripts/heartbeat-watchdog.sh` for a reference implementation.
 
-## 8. Repo tree
+## 10. Repo tree
 
 ```
 nova-fleet-overview/
@@ -263,14 +363,16 @@ nova-fleet-overview/
 └── .gitignore
 ```
 
-## 9. What's worth adopting
+## 11. What's worth adopting
 
-| Adopt                                  | Skip                                           |
-|----------------------------------------|------------------------------------------------|
-| Loop+harness pattern                   | Two peer agents on one host (specific to us)  |
-| File-based memory with synthesizer     | OpenClaw gateway (Mira's side)                 |
-| launchd + PTY for long-running agents  | Telegram-as-primary surface (operator UX)      |
-| Heartbeat + watchdog discipline        |                                                |
+| Adopt                                       | Skip                                           |
+|---------------------------------------------|------------------------------------------------|
+| Loop+harness pattern                        | Two peer agents on one host (specific to us)  |
+| File-based memory with synthesizer          | OpenClaw gateway (Mira's side)                 |
+| launchd + PTY for long-running agents       | Telegram-as-primary surface (operator UX)      |
+| Heartbeat + watchdog discipline             | Watchdog count (we run a lot — start with 1)  |
+| Hermes-style nightly pipeline (cron + plan) |                                                |
+| HTML brain (static site + edge auth)        |                                                |
 
 **Smallest valuable adoption:** pick one engineering task that benefits from
 multi-iteration work — a migration, a long-tail content port, a per-property

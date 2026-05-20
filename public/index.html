@@ -152,10 +152,12 @@
     <a href="#mcp">03 · MCP wiring</a>
     <a href="#memory">04 · Memory architecture</a>
     <a href="#loops">05 · Loop + harness</a>
-    <a href="#coordination">06 · Coordination</a>
-    <a href="#watchdog">07 · Heartbeat &amp; watchdog</a>
-    <a href="#repo">08 · Companion repo</a>
-    <a href="#adopt">09 · Adopt this</a>
+    <a href="#hermes">06 · Hermes</a>
+    <a href="#brain">07 · HTML brain</a>
+    <a href="#coordination">08 · Coordination</a>
+    <a href="#watchdog">09 · Heartbeat &amp; watchdog</a>
+    <a href="#repo">10 · Companion repo</a>
+    <a href="#adopt">11 · Adopt this</a>
   </nav>
   <p class="meta">
     v1 · 2026-05-20<br>
@@ -389,8 +391,113 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     </ul>
   </section>
 
+  <section id="hermes">
+    <div class="num">06 · Hermes</div>
+    <h2>The nightly fleet improver.</h2>
+    <p class="lede">Hermes is the cron-driven pipeline that runs while everyone sleeps. It watches what the fleet did during the day, decides what to surface next, drafts the asks, and leaves each agent a curated brief to start tomorrow with. Without Hermes the agents would still work — they'd just spend the first hour of each day figuring out what to work on.</p>
+
+    <h3>Pipeline shape</h3>
+    <div class="ascii">
+   ┌─────────────────────┐
+   │ activity-aggregator │ ← reads logs, receipts, git history, message buffer
+   └──────────┬──────────┘
+              ▼
+   ┌─────────────────────┐
+   │      planner        │ ← turns activity into proposed work items
+   └──────────┬──────────┘
+              ▼
+   ┌─────────────────────┐
+   │ contract-creator    │ ← writes each work item as a falsifiable contract
+   └──────────┬──────────┘
+              ▼
+   ┌─────────────────────┐
+   │     executor        │ ← runs contracts that don't need human approval
+   └──────────┬──────────┘
+              ▼
+   ┌─────────────────────┐
+   │ qa-verifier + curator│ ← grades outputs, files acceptance, archives misses
+   └──────────┬──────────┘
+              ▼
+   ┌─────────────────────┐
+   │ preflight-generator │ ← writes per-agent next-session briefings
+   └─────────────────────┘
+    </div>
+
+    <h3>What lands on disk each night</h3>
+    <table>
+      <tr><th>Artifact</th><th>What it is</th></tr>
+      <tr><td class="mono">nova-queue.md</td><td>Backlog of contracts waiting for Nova to claim. The "what should I work on" list, ranked.</td></tr>
+      <tr><td class="mono">contracts/*.json</td><td>One file per work item. Each names: intent, falsifiable success criteria, owner, blocking-on, do-not-touch list.</td></tr>
+      <tr><td class="mono">plans/*.md</td><td>Longer-form plans the planner drafted — turned into contracts only when the contract-creator promotes them.</td></tr>
+      <tr><td class="mono">preflight-{agent}.md</td><td>"Here's what's on your plate, here's what just broke, here's what's worth your attention" — injected at the start of the agent's next session.</td></tr>
+      <tr><td class="mono">deltas/, receipts/</td><td>Audit trail. What each cron actually did, what changed, what was rejected.</td></tr>
+    </table>
+
+    <h3>Why a pipeline, not a single agent</h3>
+    <ul>
+      <li><strong>Composable.</strong> Each stage is a small Python or bash script with a single responsibility. New stages bolt in without rewriting the orchestrator.</li>
+      <li><strong>Restartable.</strong> Any stage can re-run on its inputs without re-doing prior stages. The state lives on disk, not in memory.</li>
+      <li><strong>Watchable.</strong> Watchdogs run between stages — <code>stall-watchdog.py</code>, <code>mira-watchdog.py</code>, <code>andrew-stone-watcher.sh</code>, <code>business-outcome-probe.sh</code>. They catch problems Hermes itself can't see.</li>
+      <li><strong>Cron-friendly.</strong> Stages run on independent schedules. Activity aggregation runs every 15 minutes; the full planner runs nightly; preflight regenerates at 5am.</li>
+    </ul>
+
+    <h3>The acceptance gate</h3>
+    <p>Contracts that the executor can't safely run alone (anything touching shared state, anything that costs money, anything novel) land in an approval queue rather than executing. The operator approves or rejects from the HTML brain (next section) — one click each — and the contract returns to the pipeline.</p>
+
+    <div class="callout blue">
+      <strong>For VM engineering</strong>
+      The pattern that's portable: <em>nightly cron pipeline that reads activity → drafts work → writes a curated brief</em>. You don't need agents to benefit from this; even a daily "here's what changed in your repos + here's what's open in Linear + here's what merged that might affect you" cron is a useful version of the same idea.
+    </div>
+  </section>
+
+  <section id="brain">
+    <div class="num">07 · HTML brain</div>
+    <h2>The operator's window into the fleet.</h2>
+    <p class="lede">Everything Hermes produces is rendered to HTML at <code>mira-artifacts</code> — a private, auth-gated site that the operator opens to see fleet state, approve or reject contracts, read EOD reports, and reference the canonical design system. It's the only persistent UI in the whole system; Telegram is fast, but HTML is browsable.</p>
+
+    <h3>What lives there</h3>
+    <table>
+      <tr><th>Surface</th><th>What it shows</th></tr>
+      <tr><td class="mono">/index.html</td><td>Landing — index of every artifact emitted today.</td></tr>
+      <tr><td class="mono">/dashboard/</td><td>Live fleet dashboard. Active agents, in-flight contracts, recent failures.</td></tr>
+      <tr><td class="mono">/eod/{date}/</td><td>End-of-day reports — what the fleet shipped, what's pending, what changed.</td></tr>
+      <tr><td class="mono">/fleet-{date}.html</td><td>Daily fleet snapshot — header counts, contract burndown, watchdog state.</td></tr>
+      <tr><td class="mono">/briefs/</td><td>Long-form analysis pieces (case briefs, marketing positioning, etc.) — generated by sub-agents.</td></tr>
+      <tr><td class="mono">/hermes/</td><td>Hermes pipeline outputs — what was planned vs. what shipped.</td></tr>
+      <tr><td class="mono">/design-system.html</td><td>The Bauhaus design system you're looking at the descendant of right now. Canonical reference for all artifact rendering.</td></tr>
+    </table>
+
+    <h3>How approvals work</h3>
+    <ol>
+      <li>Hermes drops a contract into the approval queue (rendered as a card in the dashboard).</li>
+      <li>Operator opens <code>mira-artifacts</code>, clicks <code>Approve</code> or <code>Reject</code>.</li>
+      <li>An Edge function (<code>/api/approve</code>) validates the bearer token and POSTs the decision back to the fleet decision tunnel.</li>
+      <li>The next executor cron picks up the approved contract and runs it.</li>
+    </ol>
+
+    <h3>Auth</h3>
+    <p>The whole site is gated by Edge Middleware that validates a key in the query string on first visit, sets an HTTP-only cookie good for 90 days, and redirects to a clean URL so the secret never lingers in the address bar. <code>/api/health</code> is intentionally public for uptime monitors. <code>/api/approve</code>, <code>/api/contract-action</code>, and <code>/api/submit</code> require a Bearer token (different from the cookie).</p>
+
+    <h3>How content gets there</h3>
+    <ul>
+      <li><strong>Git push.</strong> An agent (Mira, typically) renders HTML to a file under the right subdirectory, commits, pushes. Vercel auto-deploys on push to <code>main</code>. This is the path for anything we want a diff-able history of.</li>
+      <li><strong>Direct API submit.</strong> Vellum (running on a separate machine) POSTs proposed content to <code>/api/submit</code>; it lands in a proposals branch for review rather than going straight to <code>main</code>.</li>
+      <li><strong>One-shot ephemeral.</strong> <code>vercel --prod</code> from the project dir for artifacts we don't want in git history.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>Why a separate site, not a SaaS</strong>
+      The brain is small (a few hundred HTML files, a half-dozen Edge endpoints) and the data sensitivity is real. A static-site deploy with edge auth gives us no shared backend to harden, no third-party SaaS to audit, and no rendering complexity beyond "render markdown / json to HTML and push." Costs roughly nothing per month.
+    </div>
+
+    <div class="callout blue">
+      <strong>For VM engineering</strong>
+      You don't need the auth complexity if you start with a public scope. Static-site + nightly cron that renders the day's state to HTML + git push is enough for many "operator wants to see what's happening" use cases. Add Edge auth when you have data that justifies it.
+    </div>
+  </section>
+
   <section id="coordination">
-    <div class="num">06 · Coordination</div>
+    <div class="num">08 · Coordination</div>
     <h2>Two agents on one host, no message bus.</h2>
     <p class="lede">Nova and Mira don't call each other. They share a filesystem and the human operator. That's it. Surprisingly robust for the work they do together.</p>
 
@@ -419,7 +526,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
   </section>
 
   <section id="watchdog">
-    <div class="num">07 · Heartbeat &amp; watchdog</div>
+    <div class="num">09 · Heartbeat &amp; watchdog</div>
     <h2>Noticing when the agent is broken.</h2>
     <p class="lede">Long-running agents fail in quiet ways. The MCP subprocess dies but the parent keeps running. The model returns text to the terminal instead of Telegram. State drifts. You need an explicit liveness signal and an explicit watchdog.</p>
 
@@ -442,7 +549,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
   </section>
 
   <section id="repo">
-    <div class="num">08 · Companion repo</div>
+    <div class="num">10 · Companion repo</div>
     <h2>What's in the GitHub repo.</h2>
     <p class="lede">A scaffold an engineer can clone to start building something similar. Not the live Nova — the live Nova has personal data, project lists, and credentials that don't belong in a public repo. Just the patterns.</p>
 
@@ -485,7 +592,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
   </section>
 
   <section id="adopt">
-    <div class="num">09 · Adopt this</div>
+    <div class="num">11 · Adopt this</div>
     <h2>What's actually worth lifting.</h2>
     <p class="lede">Not all of it. Adopt the parts that map to problems you have.</p>
 
@@ -497,6 +604,8 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
           <li><strong>File-based memory with synthesizer.</strong> Cheap, auditable, round-trips with humans.</li>
           <li><strong>launchd + PTY for long-running agents.</strong> Mac-specific but conceptually portable (systemd + pty on Linux).</li>
           <li><strong>Heartbeat + watchdog discipline.</strong> Cheap insurance against quiet failures.</li>
+          <li><strong>Hermes-style nightly pipeline.</strong> Even without agents, a nightly "read activity → draft work → write a brief" cron beats starting every day from scratch.</li>
+          <li><strong>HTML brain.</strong> A static-site + edge-auth + nightly render is enough for a real operator UI. No SaaS, no shared backend.</li>
         </ul>
       </div>
       <div class="card red">
@@ -505,6 +614,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
           <li><strong>Two peer agents on one host.</strong> Only makes sense if you have two distinct workload personalities and a single human operator. Otherwise it's complexity for its own sake.</li>
           <li><strong>OpenClaw gateway (Mira's side).</strong> Useful for our shape, more than VM eng needs.</li>
           <li><strong>The agent buddies Telegram group.</strong> Operator UX for our specific cadence. You'd build your own.</li>
+          <li><strong>Watchdog count (we run a lot).</strong> Start with one heartbeat + one watchdog. Earn the rest.</li>
         </ul>
       </div>
     </div>
