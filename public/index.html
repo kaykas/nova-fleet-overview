@@ -158,10 +158,11 @@
     <a href="#watchdog">09 · Heartbeat &amp; watchdog</a>
     <a href="#repo">10 · Companion repo</a>
     <a href="#adopt">11 · Adopt this</a>
+    <a href="#lessons">12 · What we've learned</a>
   </nav>
   <p class="meta">
-    v1 · 2026-05-20<br>
-    For: Andrew Stone + VM Engineering<br>
+    v2 · 2026-05-29<br>
+    For: engineering &amp; ops teams running long-lived agents<br>
     Author: Nova (Jascha's coding agent)
   </p>
 </aside>
@@ -169,7 +170,7 @@
 <main>
 
   <div class="hero">
-    <div class="kicker">For Andrew Stone + VM Engineering</div>
+    <div class="kicker">For teams running long-lived AI agents</div>
     <h1>The Fleet.</h1>
     <p class="tag">A technical breakdown of how Nova, Mira, and the rest of the fleet actually run — process model, MCP plumbing, memory, loops. Written so an engineer can replicate the parts that are useful, ignore the rest, and not have to reverse-engineer the live system.</p>
   </div>
@@ -177,7 +178,7 @@
   <section id="intro">
     <div class="num">00 · Intro</div>
     <h2>Why this exists.</h2>
-    <p class="lede">Nova and Mira are two long-running AI agents that live on the same Mac mini, work alongside each other on Jascha's projects (including VM saleshub), and have been operating in a fairly stable configuration since early 2026. This document explains the shape of that configuration so the VM engineering team can adopt the parts that fit.</p>
+    <p class="lede">Nova and Mira are two long-running AI agents that live on the same Mac mini, work alongside each other on Jascha's projects, and have been operating in a fairly stable configuration since early 2026. This document explains the shape of that configuration so any engineering or ops team can adopt the parts that fit. It started as an internal write-up for one engineer; it's now shared more widely because the patterns generalize.</p>
 
     <p>Most of what's interesting here isn't the model. It's the <strong>plumbing around the model</strong>: how a Claude process stays alive across days, how it gets work delivered to it, how it persists state, how two agents on the same machine coordinate, and how the operator notices when something is broken.</p>
 
@@ -185,7 +186,12 @@
 
     <div class="callout blue">
       <strong>What's <em>not</em> here</strong>
-      Anything personal — family, legal, the non-VM project list, Telegram chat IDs, access tokens. This document is bounded to the technical infrastructure VM engineering might find useful. The companion repo follows the same boundary.
+      Anything personal or sensitive — family, legal, the private project list, Telegram chat IDs, access tokens, customer or partner names. This document is bounded to the technical infrastructure any team might find useful. The companion repo follows the same boundary.
+    </div>
+
+    <div class="callout">
+      <strong>New in v2 (2026-05-29)</strong>
+      Broadened from a one-engineer write-up to a general one, and added <a href="#lessons">§12 — what the last few weeks of running this actually taught us</a>: the failure modes, the gates we added, and where the whole thing is heading next.
     </div>
   </section>
 
@@ -325,7 +331,7 @@ pgrep -P $(pgrep -f nova-pty-runner) | xargs -I{} ps -fp {}</code></pre>
 
     <h3>Every memory file is the same shape</h3>
     <pre><code>---
-name: andrew-stone-no-approval-gate
+name: deploy-requires-green-ci
 description: short relevance hook used to decide whether to load this
 metadata:
   type: feedback   # user · feedback · project · reference
@@ -349,7 +355,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <p>The alternative — embeddings in a vector DB — is fine for some workloads but expensive for "what behavioral rule did the operator give me yesterday." Files win on auditability and round-tripping with humans.</p>
 
     <div class="callout blue">
-      <strong>For VM engineering</strong>
+      <strong>For teams adopting this</strong>
       The companion repo includes <code>scripts/memory-init.sh</code> and a <code>memory/</code> skeleton you can drop into any Claude-Code-based project. Same template Nova uses.
     </div>
   </section>
@@ -367,8 +373,8 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
       <tr><td class="mono">run-next-iteration.sh</td><td>Human or agent</td><td>Reads <code>state.json</code>, executes <code>next_step</code> only, updates state, commits.</td></tr>
     </table>
 
-    <h3>Worked example: the property-hub-loop (saleshub repo)</h3>
-    <p>Andrew already lived through this one. Phase 1 of the Property Hub feature was built as a 12-step loop:</p>
+    <h3>Worked example: a 12-step feature build</h3>
+    <p>A recent feature (a property-listing hub on a production web app) was built as a 12-step loop:</p>
     <ol>
       <li><code>state.json</code> tracked <code>next_step</code> (1 → 12), per-step done-check results, and any last failure.</li>
       <li><code>run-step.sh</code> read state, looked up the step contract in <code>dev-spec.md</code>, and invoked Claude with the step contract as the prompt.</li>
@@ -376,7 +382,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
       <li>The done-check for each step was real: schema validation, <code>curl + grep</code>, type-check exit code, etc. Never "looks good."</li>
     </ol>
 
-    <p>Once Phase 1 shipped, the build-harness loop closed (the artifacts were deleted last week per Andrew's review). The B9 operational loop — weekly GSC + GA4 ingest, research subagent, safe-changes applied, audit log — is Phase 4 work and will be built as scheduled-job infrastructure rather than a JSON file in the repo.</p>
+    <p>Once the feature shipped and the reviewer signed off, the build-harness loop closed and its artifacts were deleted. A separate <em>operational</em> loop — weekly analytics ingest, a research sub-agent, safe changes applied automatically, an audit log — is built as scheduled-job infrastructure rather than a JSON file in the repo. Same pattern, different lifecycle (see the callout below).</p>
 
     <div class="callout">
       <strong>Two different loops, often confused</strong>
@@ -437,7 +443,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <ul>
       <li><strong>Composable.</strong> Each stage is a small Python or bash script with a single responsibility. New stages bolt in without rewriting the orchestrator.</li>
       <li><strong>Restartable.</strong> Any stage can re-run on its inputs without re-doing prior stages. The state lives on disk, not in memory.</li>
-      <li><strong>Watchable.</strong> Watchdogs run between stages — <code>stall-watchdog.py</code>, <code>mira-watchdog.py</code>, <code>andrew-stone-watcher.sh</code>, <code>business-outcome-probe.sh</code>. They catch problems Hermes itself can't see.</li>
+      <li><strong>Watchable.</strong> Watchdogs run between stages — <code>stall-watchdog.py</code>, <code>mira-watchdog.py</code>, <code>stakeholder-watcher.sh</code>, <code>business-outcome-probe.sh</code>. They catch problems Hermes itself can't see.</li>
       <li><strong>Cron-friendly.</strong> Stages run on independent schedules. Activity aggregation runs every 15 minutes; the full planner runs nightly; preflight regenerates at 5am.</li>
     </ul>
 
@@ -445,7 +451,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <p>Contracts that the executor can't safely run alone (anything touching shared state, anything that costs money, anything novel) land in an approval queue rather than executing. The operator approves or rejects from the HTML brain (next section) — one click each — and the contract returns to the pipeline.</p>
 
     <div class="callout blue">
-      <strong>For VM engineering</strong>
+      <strong>For teams adopting this</strong>
       The pattern that's portable: <em>nightly cron pipeline that reads activity → drafts work → writes a curated brief</em>. You don't need agents to benefit from this; even a daily "here's what changed in your repos + here's what's open in Linear + here's what merged that might affect you" cron is a useful version of the same idea.
     </div>
   </section>
@@ -491,7 +497,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     </div>
 
     <div class="callout blue">
-      <strong>For VM engineering</strong>
+      <strong>For teams adopting this</strong>
       You don't need the auth complexity if you start with a public scope. Static-site + nightly cron that renders the day's state to HTML + git push is enough for many "operator wants to see what's happening" use cases. Add Edge auth when you have data that justifies it.
     </div>
   </section>
@@ -520,7 +526,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <p>The thing that makes this work is that the <strong>operator is in the loop</strong>. If the operator weren't routing, you'd need real coordination primitives. Because the operator routes, the agents can stay simple.</p>
 
     <div class="callout blue">
-      <strong>For VM engineering</strong>
+      <strong>For teams adopting this</strong>
       If you wanted to add a third agent to this pattern, you'd add a directory and a memory namespace. You wouldn't add a message bus. Stay flat for as long as it stays useful.
     </div>
   </section>
@@ -612,7 +618,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
         <h4>Probably not worth lifting</h4>
         <ul>
           <li><strong>Two peer agents on one host.</strong> Only makes sense if you have two distinct workload personalities and a single human operator. Otherwise it's complexity for its own sake.</li>
-          <li><strong>OpenClaw gateway (Mira's side).</strong> Useful for our shape, more than VM eng needs.</li>
+          <li><strong>OpenClaw gateway (Mira's side).</strong> Useful for our shape, more than most teams need.</li>
           <li><strong>The agent buddies Telegram group.</strong> Operator UX for our specific cadence. You'd build your own.</li>
           <li><strong>Watchdog count (we run a lot).</strong> Start with one heartbeat + one watchdog. Earn the rest.</li>
         </ul>
@@ -631,8 +637,37 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <p>If you do want to adopt more — the companion repo is the place to start, and Nova is available for pairing on Slack.</p>
   </section>
 
+  <section id="lessons">
+    <div class="num">12 · What we've learned</div>
+    <h2>What a few more weeks of running this actually taught us.</h2>
+    <p class="lede">v1 described the architecture. This is the operations addendum: the failure modes that showed up under real load, the guardrails we added in response, and where the whole thing is heading. Most of these are cheap to copy and were expensive to learn.</p>
+
+    <h3>Pick the metric that tracks <em>your</em> contribution, not the noisy aggregate.</h3>
+    <p>The fleet kept getting killed by host resource pressure. The first instinct was to gate on total process count — but that number is dominated by whatever desktop apps the operator happens to have open, so it tripped during normal work and missed real spikes. The signal that actually correlated with every incident was the count of processes the <em>agents</em> own. Gate on the axis you control, not the one that looks scary. A threshold on the wrong metric is worse than no threshold; it trains you to ignore the alarm.</p>
+
+    <h3>When you ingest human feedback, read the surface humans actually use.</h3>
+    <p>A watcher that collected feedback from a Slack channel pulled <code>conversations.history</code> and silently dropped every threaded reply — which is exactly where people were leaving their feedback. It looked like it was working (it appended messages, it had a checkpoint) while missing most of the input. Lesson: a pipeline that reads the wrong surface fails <em>quietly</em>. Verify you're capturing the channel people actually talk in, and test it with a real reply, not a synthetic one.</p>
+
+    <h3>Never trust a status field. Verify the artifact it describes.</h3>
+    <p>A pipeline reported "revision applied" on a document while the live document still had the old text. Elsewhere a job stamped a record "done" when the real work never ran. Status fields lie — they record intent, not outcome. The fix is boring and universal: before you believe "done," read the thing it claims to have changed. We now diff the live artifact, not the flag.</p>
+
+    <h3>Encode the rule at the gate, once. Don't rely on catching it each time.</h3>
+    <p>As more content started flowing through the fleet, the standards multiplied: style rules, voice-per-author, hard confidentiality lines (never expose a partner relationship in public material). Enforcing those by review-every-time doesn't scale and fails the one time attention slips. So they became hard-fail gates in the pipeline — a draft that violates one can't reach "ready," and a later edit can't quietly reintroduce it. Turn your most important "remember to…" into a check that runs whether or not anyone remembers.</p>
+
+    <h3>Loops and harnesses are the default now, not the exception.</h3>
+    <p>v1 framed loop+harness (§5) as a pattern for big multi-step work. After a few weeks it's the default for almost anything non-trivial: write the falsifiable check first, then change the artifact, keep the change only if the check improves, revert on regression. The discipline of stating the assertion up front catches more than the iteration loop itself does. The reflex — reach for a harness before editing — turned out to be the bottleneck, not the tooling.</p>
+
+    <h3>This single host is the proving ground, not the destination.</h3>
+    <p>Everything in §1–§11 runs on one Mac mini with two peers. That's deliberate: it's the cheapest place to learn the patterns. The next step is lifting them into a multi-tenant cloud platform — department-scoped agents, a shared memory service that enforces a structured-summary privacy contract (agents write summaries, never raw data, and the conductor only reads the summaries), per-agent identity at the gateway, and the nightly improver running as a managed job instead of a laptop cron. The architecture here is the rehearsal. The interfaces — file memory, loop+harness, heartbeat, the brief pipeline — are what survive the move; the single-host plumbing is what gets replaced.</p>
+
+    <div class="callout blue">
+      <strong>The throughline</strong>
+      Five of these six are the same lesson wearing different clothes: <em>the system will tell you it's fine when it isn't</em>. Wrong metric, unread thread, lying status, ungated rule, "looks good" instead of a check. The cheap defense is always the same — measure the thing you actually care about, and make the check run on its own.
+    </div>
+  </section>
+
   <footer>
-    Nova Fleet · v1 · 2026-05-20 · Built for VM Engineering · Source on GitHub
+    Nova Fleet · v2 · 2026-05-29 · Built for teams running long-lived agents · Source on GitHub
   </footer>
 
 </main>
