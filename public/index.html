@@ -158,7 +158,7 @@
     <a href="#watchdog">09 · Heartbeat &amp; watchdog</a>
     <a href="#repo">10 · Companion repo</a>
     <a href="#adopt">11 · Adopt this</a>
-    <a href="#lessons">12 · What we've learned</a>
+    <a href="#lessons">12 · Operating principles</a>
   </nav>
   <p class="meta">
     v2 · 2026-05-29<br>
@@ -178,7 +178,7 @@
   <section id="intro">
     <div class="num">00 · Intro</div>
     <h2>Why this exists.</h2>
-    <p class="lede">Nova and Mira are two long-running AI agents that live on the same Mac mini, work alongside each other on Jascha's projects, and have been operating in a fairly stable configuration since early 2026. This document explains the shape of that configuration so any engineering or ops team can adopt the parts that fit. It started as an internal write-up for one engineer; it's now shared more widely because the patterns generalize.</p>
+    <p class="lede">The bet behind this document: a few AI agents that <em>persist</em> — that stay alive across days, hold their own memory, improve themselves nightly, and coordinate without a central brain — are worth more than a chat window you re-prompt from scratch every morning. Nova and Mira are two such agents, running in a fairly stable configuration on one Mac mini since early 2026, with Hermes as the substrate underneath them. This is a high-level exploration of how that actually works, written so a curious engineer can replicate the useful parts and stand up their own.</p>
 
     <p>Most of what's interesting here isn't the model. It's the <strong>plumbing around the model</strong>: how a Claude process stays alive across days, how it gets work delivered to it, how it persists state, how two agents on the same machine coordinate, and how the operator notices when something is broken.</p>
 
@@ -190,49 +190,36 @@
     </div>
 
     <div class="callout">
-      <strong>New in v2 (2026-05-29)</strong>
-      Broadened from a one-engineer write-up to a general one, and added <a href="#lessons">§12 — what the last few weeks of running this actually taught us</a>: the failure modes, the gates we added, and where the whole thing is heading next.
+      <strong>How to read this</strong>
+      Three moves. First the <em>why</em> — this section. Then the <em>how</em> — §1 through §9, the technical guts, written for an engineer. Then <em>bootstrap your own</em> — §10–§12: the companion repo and the prompt you can hand a fresh Claude Code agent to stand up a starter fleet. The <a href="#lessons">operating principles in §12</a> are the spine; if you read one section, read that one.
     </div>
   </section>
 
   <section id="shape">
     <div class="num">01 · Shape of the fleet</div>
-    <h2>Three peers, not a tree.</h2>
-    <p class="lede">There is no orchestrator. Nova and Mira are peers. Vellum is a third peer running on a different machine. None of them invokes the others — Jascha is the human courier when handoffs happen.</p>
+    <h2>Two agents, one substrate, no tree.</h2>
+    <p class="lede">There is no orchestrator. Nova and Mira are the two long-running agents. <strong>Hermes is the substrate they both run on</strong> — the nightly layer (§6) that improves the fleet itself rather than doing day-job work. Vellum is a fourth peer on a separate machine. None of them invokes the others as a boss; the human is the courier when handoffs happen.</p>
 
-    <div class="ascii">
-                          ┌──────────────────────────┐
-                          │       Jascha (human)     │
-                          │  Telegram · iMessage · …  │
-                          └────┬─────────────┬───────┘
-                               │             │
-                  ┌────────────┴─┐         ┌─┴────────────┐
-                  │   Mac mini   │         │ Work laptop  │
-                  │              │         │              │
-                  │  ┌────────┐  │         │  ┌────────┐  │
-                  │  │  Nova  │◄─┼─ files ─┼─►│ Vellum │  │
-                  │  └───┬────┘  │         │  └────────┘  │
-                  │      │       │         │              │
-                  │      ▼       │         └──────────────┘
-                  │  ┌────────┐  │
-                  │  │  Mira  │  │
-                  │  └────────┘  │
-                  │              │
-                  │   (sub-agents spawned on demand:   │
-                  │    Ryn / Volt / Wren / Voss …)     │
-                  └──────────────────────────────────┘
-    </div>
+    <figure style="margin:24px 0;">
+      <img src="/architecture.png" alt="The Fleet: an operator above a Mac mini running Nova, Mira, and Hermes, plus a laptop running Vellum, connected by file-based coordination." style="width:100%;height:auto;display:block;border:1px solid #e2e2e2;border-radius:10px;" />
+      <figcaption style="font-size:13px;color:#666;margin-top:8px;">Two long-running agents (Nova, Mira) plus the Hermes substrate on one host; a remote peer (Vellum) on another; ephemeral sub-agents spawned on demand (Ryn / Volt / Wren / Voss). Coordination is files on a shared path, not a message bus.</figcaption>
+    </figure>
 
     <div class="grid-2">
       <div class="card yellow">
         <h4>Nova</h4>
-        <span class="pill">Mac mini</span><span class="pill blue">Claude Opus</span>
-        <p>Long-running coding agent. Primary surface is Telegram. Owns: code production, deployment, multi-file refactors, day-job (Visiting Media) and personal site builds, peer review of Mira's SEO work, briefing rituals.</p>
+        <span class="pill">Mac mini</span><span class="pill blue">Claude Code · Opus</span>
+        <p>Long-running coding agent, built on a custom Claude Code setup (a PTY runner under launchd, see §2). Primary surface is Telegram. Owns: code production, deployment, multi-file refactors, day-job and personal site builds, peer review of Mira's work, briefing rituals.</p>
       </div>
       <div class="card yellow">
         <h4>Mira</h4>
         <span class="pill">Mac mini</span><span class="pill blue">OpenClaw</span>
-        <p>Long-running ops + research agent. Owns: infrastructure monitoring, YouTube production, CRM data, SEO execution, content publishing, daily-stats jobs. Has its own MCP gateway (openclaw) and its own cron stack.</p>
+        <p>Long-running ops + research agent, built on <strong>OpenClaw</strong> (a different runtime from Nova). Owns: infrastructure monitoring, content production, CRM data, SEO execution, publishing, daily-stats jobs. Has its own MCP gateway and its own cron stack.</p>
+      </div>
+      <div class="card yellow">
+        <h4>Hermes</h4>
+        <span class="pill">Mac mini</span><span class="pill blue">Substrate</span>
+        <p>The improvement <strong>substrate</strong> both agents run on — a peer, not a worker. Not a chat agent: a nightly cron pipeline that reads what the fleet did, plans what to surface, drafts contracts with falsifiable success criteria, and leaves each agent a curated brief. It improves the fleet rather than doing the day job. See §6.</p>
       </div>
       <div class="card yellow">
         <h4>Vellum</h4>
@@ -246,7 +233,7 @@
       </div>
     </div>
 
-    <p>The pattern that matters: <strong>two long-running peers on one host, plus on-demand sub-agents</strong>. Coordination is via files on a shared path, not a message bus. That's load-bearing — see §6.</p>
+    <p>The pattern that matters: <strong>two long-running agents and a shared improvement substrate on one host, plus on-demand sub-agents</strong>. The three different runtimes are deliberate — Nova on Claude Code, Mira on OpenClaw, Hermes as the cron substrate — because the failure modes differ and you don't want a single runtime bug to take the whole fleet down. Coordination is via files on a shared path, not a message bus. That's load-bearing — see §6 and §8.</p>
   </section>
 
   <section id="process">
@@ -399,8 +386,13 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
 
   <section id="hermes">
     <div class="num">06 · Hermes</div>
-    <h2>The nightly fleet improver.</h2>
-    <p class="lede">Hermes is the cron-driven pipeline that runs while everyone sleeps. It watches what the fleet did during the day, decides what to surface next, drafts the asks, and leaves each agent a curated brief to start tomorrow with. Without Hermes the agents would still work — they'd just spend the first hour of each day figuring out what to work on.</p>
+    <h2>The substrate: a nightly fleet improver.</h2>
+    <p class="lede">Hermes is the third peer — the cron-driven substrate both Nova and Mira run on top of. It runs while everyone sleeps: watches what the fleet did during the day, decides what to surface next, drafts the asks, and leaves each agent a curated brief to start tomorrow with. Without Hermes the agents would still work — they'd just spend the first hour of each day figuring out what to work on, and nothing would systematically improve the fleet itself.</p>
+
+    <figure style="margin:24px 0;">
+      <img src="/nightly-loop.png" alt="The nightly loop: Hermes cycles through aggregate, plan, contracts, execute, verify, brief." style="width:100%;max-width:560px;height:auto;display:block;margin:0 auto;border:1px solid #e2e2e2;border-radius:10px;" />
+      <figcaption style="font-size:13px;color:#666;margin-top:8px;text-align:center;">The nightly loop. Each stage is a small script; state lives on disk so any stage can re-run on its inputs. Anything unsafe to run alone lands in an approval queue first.</figcaption>
+    </figure>
 
     <h3>Pipeline shape</h3>
     <div class="ascii">
@@ -594,7 +586,17 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
 
     <p>None of the scripts contain credentials or chat IDs. The PTY runner is sanitized to its essential pattern. The memory examples are made-up.</p>
 
-    <p>Drop the repo URL into a Claude Code session and ask it to set up a fleet-pattern agent in a new directory. It should be enough.</p>
+    <p>The bootstrap is deliberately low-ceremony: if you have access to the repo, you hand it and a one-paragraph prompt to a fresh Claude Code agent and let it stand up the starter fleet for you. Something like:</p>
+
+    <pre><code>Read the nova-fleet-overview companion repo at &lt;repo-url&gt;.
+In a new directory, set me up a single persistent agent on this
+pattern: a launchd + PTY runner so it survives terminal close, a
+file-based memory/ dir with the synthesizer, the loop+harness
+skill, and a heartbeat stamp + watchdog. Skip the second agent and
+the OpenClaw side for now — one agent, the plumbing, nothing I have
+to reverse-engineer. Tell me what to fill in (tokens, paths) as you go.</code></pre>
+
+    <p>That's the whole point of writing this down: the patterns are portable, and the repo plus a prompt is enough to start. How far you get is gated only by who has access to the repo.</p>
   </section>
 
   <section id="adopt">
@@ -638,9 +640,9 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
   </section>
 
   <section id="lessons">
-    <div class="num">12 · What we've learned</div>
-    <h2>What a few more weeks of running this actually taught us.</h2>
-    <p class="lede">v1 described the architecture. This is the operations addendum: the failure modes that showed up under real load, the guardrails we added in response, and where the whole thing is heading. Most of these are cheap to copy and were expensive to learn.</p>
+    <div class="num">12 · Operating principles</div>
+    <h2>The principles that keep it standing.</h2>
+    <p class="lede">The architecture above is the easy half. The hard half is the handful of principles that keep a persistent fleet from quietly rotting — the failure modes that show up under real load, and the guardrails that answer them. This is the spine of the system; if the rest of the document is the body, this is what holds it upright. Cheap to copy, expensive to learn.</p>
 
     <h3>Pick the metric that tracks <em>your</em> contribution, not the noisy aggregate.</h3>
     <p>The fleet kept getting killed by host resource pressure. The first instinct was to gate on total process count — but that number is dominated by whatever desktop apps the operator happens to have open, so it tripped during normal work and missed real spikes. The signal that actually correlated with every incident was the count of processes the <em>agents</em> own. Gate on the axis you control, not the one that looks scary. A threshold on the wrong metric is worse than no threshold; it trains you to ignore the alarm.</p>
@@ -654,8 +656,8 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <h3>Encode the rule at the gate, once. Don't rely on catching it each time.</h3>
     <p>As more content started flowing through the fleet, the standards multiplied: style rules, voice-per-author, hard confidentiality lines (never expose a partner relationship in public material). Enforcing those by review-every-time doesn't scale and fails the one time attention slips. So they became hard-fail gates in the pipeline — a draft that violates one can't reach "ready," and a later edit can't quietly reintroduce it. Turn your most important "remember to…" into a check that runs whether or not anyone remembers.</p>
 
-    <h3>Loops and harnesses are the default now, not the exception.</h3>
-    <p>v1 framed loop+harness (§5) as a pattern for big multi-step work. After a few weeks it's the default for almost anything non-trivial: write the falsifiable check first, then change the artifact, keep the change only if the check improves, revert on regression. The discipline of stating the assertion up front catches more than the iteration loop itself does. The reflex — reach for a harness before editing — turned out to be the bottleneck, not the tooling.</p>
+    <h3>Loops and harnesses are the default, not the exception.</h3>
+    <p>Loop+harness (§5) isn't just for big multi-step work; it's the default for almost anything non-trivial. Write the falsifiable check first, change the artifact, keep the change only if the check improves, revert on regression. The discipline of stating the assertion up front catches more than the iteration loop itself does. The reflex — reach for a harness before editing — turns out to be the bottleneck, not the tooling.</p>
 
     <h3>This single host is the proving ground, not the destination.</h3>
     <p>Everything in §1–§11 runs on one Mac mini with two peers. That's deliberate: it's the cheapest place to learn the patterns. The next step is lifting them into a multi-tenant cloud platform — department-scoped agents, a shared memory service that enforces a structured-summary privacy contract (agents write summaries, never raw data, and the conductor only reads the summaries), per-agent identity at the gateway, and the nightly improver running as a managed job instead of a laptop cron. The architecture here is the rehearsal. The interfaces — file memory, loop+harness, heartbeat, the brief pipeline — are what survive the move; the single-host plumbing is what gets replaced.</p>
