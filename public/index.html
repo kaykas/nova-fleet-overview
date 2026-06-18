@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f5f5f0">
-<title>Nova Fleet — Architecture overview for engineering teams</title>
-<meta name="description" content="A technical deep-dive on the Nova / Mira agent fleet — process model, MCP wiring, memory architecture, loop+harness pattern, and the scripts an engineering team can adopt to build something similar.">
+<title>Mira Fleet Architecture</title>
+<meta name="description" content="A public, sanitized architecture reference for long-lived AI agent systems coordinated by Mira / OpenClaw — process model, MCP wiring, layered memory architecture, loop+harness pattern, and transferable scripts.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;500;700;900&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -61,12 +61,12 @@
   }
   @media (max-width: 900px) { aside.rail { position: static; height: auto; } }
   aside.rail h1 {
-    font-weight: 900; font-size: 28px; letter-spacing: -0.02em; margin-bottom: 4px; line-height: 1.05;
+    font-weight: 900; font-size: 22px; letter-spacing: -0.02em; margin-bottom: 4px; line-height: 1.1;
   }
   aside.rail .sub { font-family: var(--font-mono); font-size: 11px; color: var(--bh-yellow); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 36px; }
-  aside.rail nav { font-family: var(--font-mono); font-size: 13px; }
+  aside.rail nav { font-family: var(--font-mono); font-size: 12px; }
   aside.rail nav a {
-    display: block; padding: 6px 0; color: var(--bh-white); text-decoration: none; border-bottom: 1px solid #333; transition: color 0.2s, padding 0.2s;
+    display: block; padding: 5px 0; color: var(--bh-white); text-decoration: none; border-bottom: 1px solid #333; transition: color 0.2s, padding 0.2s;
   }
   aside.rail nav a:hover { color: var(--bh-yellow); padding-left: 8px; }
   aside.rail .meta { font-family: var(--font-mono); font-size: 10px; color: var(--bh-grey-3); margin-top: 32px; line-height: 1.5; text-transform: uppercase; letter-spacing: 0.1em; }
@@ -98,9 +98,9 @@
     background: var(--bh-yellow); border: var(--border); padding: 56px 48px; box-shadow: var(--shadow-hard); margin-bottom: 96px;
   }
   .hero .kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 16px; }
-  .hero h1 { font-weight: 900; font-size: 80px; letter-spacing: -0.04em; line-height: 0.95; margin-bottom: 16px; }
+  .hero h1 { font-weight: 900; font-size: 72px; letter-spacing: -0.04em; line-height: 0.95; margin-bottom: 16px; }
   @media (max-width: 900px) { .hero { padding: 36px 24px; } .hero h1 { font-size: 48px; } }
-  .hero .tag { font-size: 22px; font-weight: 300; max-width: 720px; }
+  .hero .tag { font-size: 20px; font-weight: 300; max-width: 720px; }
 
   .pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; padding: 4px 10px; background: var(--bh-black); color: var(--bh-yellow); margin-right: 6px; margin-bottom: 4px; }
   .pill.blue { background: var(--bh-blue); color: var(--bh-white); }
@@ -133,6 +133,29 @@
   .callout.blue strong { color: var(--bh-blue); }
   .callout.yellow strong { color: var(--bh-yellow-2, #d97706); }
 
+  .memory-layers { display: flex; flex-direction: column; gap: 0; margin: 24px 0; }
+  .memory-layer {
+    display: grid; grid-template-columns: 40px 180px 1fr; gap: 0;
+    border: 1px solid var(--bh-black); border-bottom: none; align-items: stretch;
+  }
+  .memory-layer:last-child { border-bottom: 1px solid var(--bh-black); }
+  .memory-layer .layer-num {
+    background: var(--bh-black); color: var(--bh-yellow); font-family: var(--font-mono);
+    font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    padding: 12px 8px; border-right: 1px solid var(--bh-black);
+  }
+  .memory-layer .layer-name {
+    background: var(--bh-grey); font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+    padding: 12px 14px; border-right: 1px solid var(--bh-black); display: flex; align-items: center;
+  }
+  .memory-layer .layer-desc { padding: 12px 14px; font-size: 13px; }
+  .memory-layer .layer-desc .when { font-family: var(--font-mono); font-size: 10px; color: var(--bh-grey-3); text-transform: uppercase; letter-spacing: 0.1em; }
+  @media (max-width: 900px) {
+    .memory-layer { grid-template-columns: 32px 1fr; }
+    .memory-layer .layer-name { grid-column: 2; border-right: none; border-bottom: 1px solid var(--bh-grey-2); }
+    .memory-layer .layer-desc { grid-column: 2; }
+  }
+
   a { color: var(--bh-blue); text-decoration: underline; }
   a:hover { color: var(--bh-red); }
 
@@ -143,8 +166,8 @@
 <div class="page">
 
 <aside class="rail">
-  <h1>Nova Fleet</h1>
-  <p class="sub">Architecture overview</p>
+  <h1>Mira Fleet Architecture</h1>
+  <p class="sub">Architecture reference</p>
   <nav>
     <a href="#intro">00 · Intro</a>
     <a href="#shape">01 · Shape of the fleet</a>
@@ -152,7 +175,7 @@
     <a href="#mcp">03 · MCP wiring</a>
     <a href="#memory">04 · Memory architecture</a>
     <a href="#loops">05 · Loop + harness</a>
-    <a href="#hermes">06 · Hermes</a>
+    <a href="#hermes">06 · Hermes substrate</a>
     <a href="#brain">07 · HTML brain</a>
     <a href="#coordination">08 · Coordination</a>
     <a href="#watchdog">09 · Heartbeat &amp; watchdog</a>
@@ -161,9 +184,9 @@
     <a href="#lessons">12 · Operating principles</a>
   </nav>
   <p class="meta">
-    v2 · 2026-05-29<br>
-    For: engineering &amp; ops teams running long-lived agents<br>
-    Author: Nova (Jascha's coding agent)
+    v3 · 2026-06-18<br>
+    For: teams running long-lived agents<br>
+    Sanitized public reference — no private data
   </p>
 </aside>
 
@@ -171,69 +194,72 @@
 
   <div class="hero">
     <div class="kicker">For teams running long-lived AI agents</div>
-    <h1>The Fleet.</h1>
-    <p class="tag">A technical breakdown of how Nova, Mira, and the rest of the fleet actually run — process model, MCP plumbing, memory, loops. Written so an engineer can replicate the parts that are useful, ignore the rest, and not have to reverse-engineer the live system.</p>
+    <h1>Mira Fleet Architecture.</h1>
+    <p class="tag">A technical breakdown of how Mira and the rest of the fleet actually run — process model, MCP plumbing, layered memory, loops. A sanitized public reference so an engineer can replicate the useful parts, ignore the rest, and not have to reverse-engineer a live system.</p>
   </div>
 
   <section id="intro">
     <div class="num">00 · Intro</div>
     <h2>Why this exists.</h2>
-    <p class="lede">The bet behind this document: a few AI agents that <em>persist</em> — that stay alive across days, hold their own memory, improve themselves nightly, and coordinate without a central brain — are worth more than a chat window you re-prompt from scratch every morning. Nova and Mira are two such agents, running in a fairly stable configuration on one Mac mini since early 2026, with Hermes as the substrate underneath them. This is a high-level exploration of how that actually works, written so a curious engineer can replicate the useful parts and stand up their own.</p>
+    <p class="lede">The bet behind this document: a few AI agents that <em>persist</em> — that stay alive across days, hold their own memory, improve themselves nightly, and coordinate without a central brain — are worth more than a chat window you re-prompt from scratch every morning. Mira is the coordinator; specialist peers handle deeper workloads. Hermes is the substrate underneath them. This is a high-level breakdown of how that actually works, written so a curious engineer can replicate the useful parts and stand up their own.</p>
 
-    <p>Most of what's interesting here isn't the model. It's the <strong>plumbing around the model</strong>: how a Claude process stays alive across days, how it gets work delivered to it, how it persists state, how two agents on the same machine coordinate, and how the operator notices when something is broken.</p>
+    <p>Most of what's interesting here isn't the model. It's the <strong>plumbing around the model</strong>: how a Claude process stays alive across days, how it gets work delivered to it, how it persists state across multiple memory layers, how two agents on the same machine coordinate, and how the operator notices when something is broken.</p>
 
-    <p>None of this is novel research. It's a particular composition of existing pieces — Claude Code, launchd, MCP, a PTY wrapper, a few shell scripts, a SQLite database, and the file system — that happens to be productive. If you wanted to stand up a similar fleet, you could.</p>
+    <p>None of this is novel research. It's a particular composition of existing pieces — Claude Code, launchd, MCP, a PTY wrapper, a few shell scripts, a vector store, and the file system — that happens to be productive. If you wanted to stand up a similar fleet, you could.</p>
 
     <div class="callout blue">
-      <strong>What's <em>not</em> here</strong>
-      Anything personal or sensitive — family, legal, the private project list, Telegram chat IDs, access tokens, customer or partner names. This document is bounded to the technical infrastructure any team might find useful. The companion repo follows the same boundary.
+      <strong>What's not here</strong>
+      Anything personal or sensitive — operator names, company names, private project lists, chat IDs, access tokens, customer or partner names. This document is bounded to the technical infrastructure patterns any team might find useful. The companion repo follows the same boundary. See <a href="docs/privacy-checklist.md">docs/privacy-checklist.md</a> for what was deliberately omitted and why.
     </div>
 
     <div class="callout">
       <strong>How to read this</strong>
-      Three moves. First the <em>why</em> — this section. Then the <em>how</em> — §1 through §9, the technical guts, written for an engineer. Then <em>bootstrap your own</em> — §10–§12: the companion repo and the prompt you can hand a fresh Claude Code agent to stand up a starter fleet. The <a href="#lessons">operating principles in §12</a> are the spine; if you read one section, read that one.
+      Three moves. First the <em>why</em> — this section. Then the <em>how</em> — §1 through §9, the technical guts, written for an engineer. Then <em>bootstrap your own</em> — §10–§12: the companion repo, the transferable quickstart, and the operating principles. The <a href="#lessons">principles in §12</a> are the spine; if you read one section, read that one.
     </div>
   </section>
 
   <section id="shape">
     <div class="num">01 · Shape of the fleet</div>
-    <h2>Two agents, one substrate, no tree.</h2>
-    <p class="lede">There is no orchestrator. Nova and Mira are the two long-running agents. <strong>Hermes is the substrate they both run on</strong> — the nightly layer (§6) that improves the fleet itself rather than doing day-job work. Vellum is a fourth peer on a separate machine. None of them invokes the others as a boss; the human is the courier when handoffs happen.</p>
+    <h2>Mira coordinates. Peers specialize.</h2>
+    <p class="lede">There is no orchestrator. Mira is the coordinator — the long-running ops and research agent. Specialist peers handle coding, builds, and deep-work. <strong>Hermes is the substrate both run on</strong> — the nightly layer (§6) that improves the fleet itself rather than doing day-job work. None of them invoke each other as a boss; the human operator is the courier when handoffs happen.</p>
 
     <figure style="margin:24px 0;">
-      <img src="/architecture.png" alt="The Fleet: an operator above a Mac mini running Nova, Mira, and Hermes, plus a laptop running Vellum, connected by file-based coordination." style="width:100%;height:auto;display:block;border:1px solid #e2e2e2;border-radius:10px;" />
-      <figcaption style="font-size:13px;color:#666;margin-top:8px;">Two long-running agents (Nova, Mira) plus the Hermes substrate on one host; a remote peer (Vellum) on another; ephemeral sub-agents spawned on demand (Ryn / Volt / Wren / Voss). Coordination is files on a shared path, not a message bus.</figcaption>
+      <img src="/architecture.png" alt="Fleet topology diagram: an operator above a primary host running Mira and peer agents plus Hermes, plus a secondary host running a remote executor, connected by file-based coordination." style="width:100%;height:auto;display:block;border:1px solid #e2e2e2;" />
+      <figcaption style="font-size:13px;color:#666;margin-top:8px;">
+        Fleet topology: Mira (coordinator) and peer agents on one host; a remote executor on another; ephemeral sub-agents spawned on demand. Coordination is files on a shared path, not a message bus.
+        <br><em style="font-size:11px;">Note: diagram reflects the architecture pattern; specific agent names in the image are illustrative.</em>
+      </figcaption>
     </figure>
 
     <div class="grid-2">
       <div class="card yellow">
-        <h4>Nova</h4>
-        <span class="pill">Mac mini</span><span class="pill blue">Claude Code · Opus</span>
-        <p>Long-running coding agent, built on a custom Claude Code setup (a PTY runner under launchd, see §2). Primary surface is Telegram. Owns: code production, deployment, multi-file refactors, day-job and personal site builds, peer review of Mira's work, briefing rituals.</p>
+        <h4>Mira — coordinator</h4>
+        <span class="pill">Primary host</span><span class="pill blue">OpenClaw runtime</span>
+        <p>Long-running coordinator built on OpenClaw. Primary operator-facing surface is a chat channel. Owns: infrastructure monitoring, content production, analytics, publishing, daily-stats jobs, and cross-agent coordination. Has its own MCP gateway and its own cron stack.</p>
       </div>
       <div class="card yellow">
-        <h4>Mira</h4>
-        <span class="pill">Mac mini</span><span class="pill blue">OpenClaw</span>
-        <p>Long-running ops + research agent, built on <strong>OpenClaw</strong> (a different runtime from Nova). Owns: infrastructure monitoring, content production, CRM data, SEO execution, publishing, daily-stats jobs. Has its own MCP gateway and its own cron stack.</p>
+        <h4>Peer agent — specialist</h4>
+        <span class="pill">Primary host</span><span class="pill blue">Claude Code</span>
+        <p>Long-running specialist agent built on a custom Claude Code setup (PTY runner under launchd, see §2). Owns: code production, deployment, multi-file refactors, peer review. Receives work via handoff files and the coordinator queue.</p>
       </div>
       <div class="card yellow">
-        <h4>Hermes</h4>
-        <span class="pill">Mac mini</span><span class="pill blue">Substrate</span>
+        <h4>Hermes — substrate</h4>
+        <span class="pill">Primary host</span><span class="pill blue">Cron pipeline</span>
         <p>The improvement <strong>substrate</strong> both agents run on — a peer, not a worker. Not a chat agent: a nightly cron pipeline that reads what the fleet did, plans what to surface, drafts contracts with falsifiable success criteria, and leaves each agent a curated brief. It improves the fleet rather than doing the day job. See §6.</p>
       </div>
       <div class="card yellow">
-        <h4>Vellum</h4>
-        <span class="pill">Laptop</span><span class="pill blue">Codex</span>
-        <p>Deep-work executor on a separate machine. Reads a snapshot of the fleet's memory; writes back via a signed HTTP POST. Useful when a task needs web access or a larger context than is practical to keep warm on the mini.</p>
+        <h4>Remote executor — deep-work</h4>
+        <span class="pill">Secondary host</span><span class="pill blue">Codex / LLM</span>
+        <p>Deep-work executor on a separate machine. Reads a snapshot of the fleet's memory; writes back via a signed HTTP POST. Useful when a task needs web access or a larger context than is practical to keep warm on the primary host.</p>
       </div>
       <div class="card yellow">
-        <h4>Sub-agents</h4>
+        <h4>Sub-agents — ephemeral</h4>
         <span class="pill">Ephemeral</span>
-        <p>Spawned by Nova or Mira inside their own process for a single task. Named (Ryn / Volt / Voss / Wren / etc.) so the operator can talk about them, but they aren't long-running. They die when the task is done.</p>
+        <p>Spawned by the coordinator or peer agent inside their own process for a single task. Named so the operator can talk about them, but they aren't long-running. They die when the task is done.</p>
       </div>
     </div>
 
-    <p>The pattern that matters: <strong>two long-running agents and a shared improvement substrate on one host, plus on-demand sub-agents</strong>. The three different runtimes are deliberate — Nova on Claude Code, Mira on OpenClaw, Hermes as the cron substrate — because the failure modes differ and you don't want a single runtime bug to take the whole fleet down. Coordination is via files on a shared path, not a message bus. That's load-bearing — see §6 and §8.</p>
+    <p>The pattern that matters: <strong>a coordinator, one or more specialist peers, and a shared improvement substrate on one host, plus on-demand sub-agents</strong>. The two different runtimes (OpenClaw for coordinator, Claude Code for specialist) are deliberate — because the failure modes differ and you don't want a single runtime bug to take the whole fleet down. Coordination is via files on a shared path, not a message bus. That's load-bearing — see §6 and §8.</p>
   </section>
 
   <section id="process">
@@ -241,77 +267,164 @@
     <h2>Keeping a Claude process alive for weeks.</h2>
     <p class="lede">A Claude Code process is a CLI invocation. By default it lives as long as the terminal that launched it. To get a long-running agent you need a supervisor that survives terminal closure, PTY allocation that satisfies Claude's interactive mode, and a clean restart story.</p>
 
-    <h3>Nova's current process tree</h3>
+    <h3>The process tree</h3>
     <div class="ascii">
-launchd (com.nova.telegram)
-  └─ python3 ~/.claude/nova-pty-runner.py
+launchd (com.example.agent)              ← user-level LaunchAgent
+  └─ python3 agent-pty-runner.py         ← PTY supervisor
        └─ claude --dangerously-skip-permissions
-                 --channels plugin:telegram@claude-plugins-official
-            └─ bun (MCP subprocess: plugin:telegram)
+                 --channels plugin:YOUR_CHANNEL_PLUGIN
+            └─ bun (MCP subprocess: channel plugin)
     </div>
 
     <h4>Why the layers</h4>
     <ol>
       <li><strong>launchd</strong> is the macOS process supervisor. A LaunchAgent plist registers the job under <code>gui/&lt;uid&gt;</code>, which restarts it on crash and survives login/logout. Run as a user-level agent, not a system daemon — these processes need user-keychain access and the same TCC permissions a desktop session has.</li>
-      <li><strong>PTY runner</strong> is a small Python script that allocates a pseudo-terminal, spawns Claude with that PTY as stdin/stdout, and re-pipes events. It exists because Claude's interactive mode wants a real TTY. The earlier shape was <code>tmux</code>; tmux died when the host's tmux server died. PTY runner is decoupled from tmux entirely.</li>
-      <li><strong>Claude CLI</strong> runs Claude with channels enabled. Inbound Telegram messages arrive via the channel; outbound goes through the MCP <code>reply</code> tool.</li>
-      <li><strong>bun (MCP server)</strong> is a child of the Claude process — the Telegram MCP plugin's runtime. If it dies, the Claude process stays alive but the channel goes mute. That's a known failure mode; the watchdog catches it (§7).</li>
+      <li><strong>PTY runner</strong> (<code>scripts/agent-pty-runner.py</code>) is a small Python script that allocates a pseudo-terminal, spawns Claude with that PTY as stdin/stdout, and re-pipes events. It exists because Claude's interactive mode wants a real TTY. The earlier shape was <code>tmux</code>; tmux died when the host's tmux server died. PTY runner decouples entirely from tmux.</li>
+      <li><strong>Claude CLI</strong> runs Claude with channels enabled. Inbound messages arrive via the channel; outbound goes through the MCP <code>reply</code> tool.</li>
+      <li><strong>bun (MCP server)</strong> is a child of the Claude process — the channel MCP plugin's runtime. If it dies, the Claude process stays alive but the channel goes mute. Known failure mode; the watchdog catches it (§9).</li>
     </ol>
 
-    <h3>Restart command (for reference)</h3>
-    <pre><code># Restart Nova's process tree end-to-end. launchd brings the runner
-# back up, the runner respawns Claude, Claude respawns bun.
-launchctl kickstart -k gui/$(id -u)/com.nova.telegram
+    <h3>Restart command</h3>
+    <pre><code># Restart the agent's process tree end-to-end.
+# launchd brings the runner back up, runner respawns Claude, Claude respawns bun.
+launchctl kickstart -k gui/$(id -u)/com.example.agent
 
 # Inspect the live tree
-pgrep -fl nova-pty-runner.py
-pgrep -P $(pgrep -f nova-pty-runner) | xargs -I{} ps -fp {}</code></pre>
+pgrep -fl agent-pty-runner.py
+pgrep -P $(pgrep -f agent-pty-runner) | xargs -I{} ps -fp {}</code></pre>
 
-    <p>Mira runs a similar pattern but via the OpenClaw harness. Same principle (launchd supervises, sub-process owns the model, MCP servers attach as children).</p>
+    <p>Mira (coordinator) runs a similar pattern but via the OpenClaw harness. Same principle: a supervisor owns the process, sub-processes own the model connection and channel, child processes own MCP services.</p>
 
     <div class="callout">
       <strong>Failure mode worth knowing</strong>
-      The bun MCP subprocess can die silently while Claude keeps running. Symptom: the agent stops responding on Telegram but logs look normal. Fix: kickstart launchd, which tears down the whole tree. See <code>scripts/nova-restart.sh</code> in the companion repo.
+      The bun MCP subprocess can die silently while Claude keeps running. Symptom: the agent stops responding on the channel but logs look normal. Fix: kickstart launchd, which tears down the whole tree. See <code>scripts/agent-restart.sh</code> in the companion repo.
     </div>
+
+    <p>See <a href="docs/process-model.md"><code>docs/process-model.md</code></a> for the full runbook including Linux port (systemd), all known failure modes, and the launchd plist reference.</p>
   </section>
 
   <section id="mcp">
     <div class="num">03 · MCP wiring</div>
     <h2>How tools reach the model.</h2>
-    <p class="lede">Every external system the agents touch — Telegram, Slack, Gmail, Drive, Supabase, Vercel, Fathom, internal queues — is wired as an MCP (Model Context Protocol) server. The agent doesn't talk to APIs directly; it calls tools the MCP server exposes.</p>
+    <p class="lede">Every external system the agents touch is wired as an MCP (Model Context Protocol) server. The agent doesn't talk to APIs directly; it calls tools the MCP server exposes.</p>
 
     <h3>What MCP gives you</h3>
     <ul>
       <li><strong>Single auth boundary per service.</strong> The MCP server holds the credential; the agent gets a tool. If the token rotates, only the MCP server's env changes.</li>
-      <li><strong>Schemas for free.</strong> Each tool declares its JSON schema. Claude validates calls against it. No drift between "what the docs say" and "what the model attempted."</li>
-      <li><strong>Composition.</strong> A single agent can mount many servers. Nova mounts Telegram, Gmail, Drive, Vercel, Supabase, Slack, Fathom, Calendar, and a few internal ones.</li>
+      <li><strong>Schemas for free.</strong> Each tool declares its JSON schema. The model validates calls against it.</li>
+      <li><strong>Composition.</strong> A single agent can mount many servers: email, drive, messaging channel, analytics, deployment, internal queues — all as tools.</li>
     </ul>
 
-    <h3>Two flavors of MCP server in this fleet</h3>
+    <h3>Two flavors of MCP server</h3>
     <table>
       <tr><th>Flavor</th><th>Example</th><th>Runtime</th><th>Auth model</th></tr>
-      <tr><td>Hosted (claude.ai)</td><td class="mono">gmail · drive · slack · supabase · vercel</td><td>Claude.ai infrastructure</td><td>OAuth via Claude account</td></tr>
-      <tr><td>Local plugin</td><td class="mono">plugin:telegram@claude-plugins-official</td><td>bun subprocess on Mac mini</td><td>Bot token + access.json allowlist</td></tr>
+      <tr><td>Hosted (via gateway)</td><td class="mono">gmail · drive · slack · vercel · supabase</td><td>Gateway infrastructure</td><td>OAuth via LLM provider account</td></tr>
+      <tr><td>Local plugin</td><td class="mono">plugin:channel@claude-plugins-official</td><td>bun subprocess on local host</td><td>Bot token + access.json allowlist</td></tr>
     </table>
 
-    <h3>Telegram channel binding (the one we lean on hardest)</h3>
-    <p>Inbound Telegram messages arrive in the agent's context as <code>&lt;channel source="..." chat_id="..." message_id="..." user="..." ts="..."&gt;</code> blocks. The agent replies via the <code>reply</code> tool, passing <code>chat_id</code> back. Access is managed by a local file (<code>~/.claude/channels/telegram/access.json</code>), never by remote message — that's deliberate to prevent prompt-injection of allowlist changes.</p>
+    <h3>Channel binding</h3>
+    <p>Inbound messages arrive in the agent's context as <code>&lt;channel source="..." ...&gt;</code> blocks. The agent replies via the <code>reply</code> tool. Access is managed by a local file, never by remote message — that's deliberate to prevent prompt-injection of allowlist changes.</p>
 
     <div class="callout yellow">
       <strong>Gotcha</strong>
-      The MCP server runs as a child process of Claude. If you put your bot token in the wrong env file (e.g., <code>~/.zshrc</code> instead of the launchd plist or <code>~/.claude/.mcp.json</code>), the bun subprocess won't see it and the channel never binds. Symptom: agent comes up clean, Telegram drops messages silently. Hour-long debugging session waiting to happen.
+      The MCP server runs as a child process of Claude. If you put your token in the wrong env file (e.g., <code>~/.zshrc</code> instead of the launchd plist or <code>~/.claude/.mcp.json</code>), the bun subprocess won't see it and the channel never binds. Symptom: agent comes up clean, channel drops messages silently. Hour-long debugging session waiting to happen.
     </div>
   </section>
 
   <section id="memory">
     <div class="num">04 · Memory architecture</div>
-    <h2>What an agent remembers between sessions.</h2>
-    <p class="lede">Claude's context window resets every conversation. To survive across sessions, agents read a memory directory before every turn. The memory is files on disk, indexed by a small synthesizer that prunes bloat.</p>
+    <h2>Layered memory that survives context resets.</h2>
+    <p class="lede">Claude's context window resets every conversation. To survive across sessions, agents read a <strong>layered memory system</strong> before every turn. This isn't just a flat directory of files — it's a 10-layer architecture from fast boot context through long-term semantic storage, relationship graphs, and compressed project briefings.</p>
 
-    <h3>File layout</h3>
-    <pre><code>~/.openclaw/workspace/memory/
+    <h3>The 10 memory layers</h3>
+
+    <div class="memory-layers">
+      <div class="memory-layer">
+        <div class="layer-num">0</div>
+        <div class="layer-name">Boot context</div>
+        <div class="layer-desc">
+          Role file (AGENTS.md), soul/principles, hard-stop preflight, curated MEMORY.md index, today's raw log, active tasks, violation log (last 20).
+          <div class="when">Read: every session start, automatically</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">1</div>
+        <div class="layer-name">Flat-file memory</div>
+        <div class="layer-desc">
+          Typed markdown files: <code>feedback_*.md</code>, <code>project_*.md</code>, <code>reference_*.md</code>, <code>user_*.md</code>. Each has YAML frontmatter with name, type, and relevance hook.
+          <div class="when">Read: on demand, or via links in boot context</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">2</div>
+        <div class="layer-name">Daily raw log</div>
+        <div class="layer-desc">
+          <code>memory/YYYY-MM-DD.md</code> — raw session events, decisions, notes. Not curated; synthesizer compresses to Layer 1 entries nightly.
+          <div class="when">Read: boot (today + yesterday)</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">3</div>
+        <div class="layer-name">Semantic memory palace</div>
+        <div class="layer-desc">
+          SQLite + vector-embedding store, 9,000+ entries, shared across agents. Hierarchical: wing (domain) → room (topic) → hall (type: fact/event/decision/preference/advice/problem). Used for fuzzy recall of prior decisions, project history, contact facts.
+          <div class="when">Read: explicit search call — not auto-read at boot</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">4</div>
+        <div class="layer-name">Agent diaries</div>
+        <div class="layer-desc">
+          Per-agent append-only logs with tags and importance scores (1–5). Used for session reflections, pattern discovery, critical events.
+          <div class="when">Read: explicit query by tag or importance</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">5</div>
+        <div class="layer-name">Project memories</div>
+        <div class="layer-desc">
+          Memories tagged to named project buckets. Support timelines, summary views, and relationship graphs between project memories.
+          <div class="when">Read: explicit project query</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">6</div>
+        <div class="layer-name">Compressed context</div>
+        <div class="layer-desc">
+          Pre-computed AAAK-compressed representations of memory scopes (~30× smaller). Used for loading large memory windows efficiently into a single model call.
+          <div class="when">Read: explicit load for project briefings or handoffs</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">7</div>
+        <div class="layer-name">Relationship graph</div>
+        <div class="layer-desc">
+          Typed directed links between memories: <code>related_to</code>, <code>causes</code>, <code>part_of</code>, <code>contradicts</code>, <code>updates</code>, <code>references</code>. Traversable by hop count.
+          <div class="when">Read: traversal calls (get_related, get_memory_graph)</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">8</div>
+        <div class="layer-name">Handoff documents</div>
+        <div class="layer-desc">
+          Structured markdown: <code>handoff-YYYY-MM-DD-&#123;from&#125;-to-&#123;to&#125;.md</code>. Four sections: what I finished, what's open, what I'd like you to look at, anything fragile.
+          <div class="when">Read: next session start by receiving agent</div>
+        </div>
+      </div>
+      <div class="memory-layer">
+        <div class="layer-num">9</div>
+        <div class="layer-name">Operational state</div>
+        <div class="layer-desc">
+          <code>active-tasks.md</code>, <code>reminders.json</code>, <code>violation-log.md</code>, <code>autonomous-work-log.md</code>, <code>trigger-state.json</code>.
+          <div class="when">Read: boot context</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Flat-file memory shape</h3>
+    <pre><code>memory/
   MEMORY.md                          # hand-curated index (≤150 lines)
-  feedback_*.md                      # behavioral rules learned from corrections
+  feedback_*.md                      # behavioral rules from corrections
   project_*.md                       # who/what/why for active initiatives
   reference_*.md                     # pointers to external systems
   user_*.md                          # facts about the operator</code></pre>
@@ -331,19 +444,36 @@ Rule, fact, or pointer.
 
 Cross-link other memories: [[other-memory-slug]]</code></pre>
 
-    <h3>Why a flat directory of files works</h3>
+    <h3>Why flat files for the base layer</h3>
     <ul>
       <li><strong>Auditable.</strong> Every memory is a git-able markdown file. You can <code>git diff</code> what changed between sessions.</li>
       <li><strong>Editable by hand.</strong> If the operator notices the agent has a wrong belief, they edit a file.</li>
-      <li><strong>Composable.</strong> Nova and Mira walk each other's memory stores through a symmetric template — same frontmatter, same naming, same <code>[[link]]</code> resolver.</li>
+      <li><strong>Composable.</strong> Multiple agents walk the same store via a symmetric template — same frontmatter, same naming, same <code>[[link]]</code> resolver.</li>
       <li><strong>Synthesized, not appended.</strong> A nightly job rewrites <code>MEMORY.md</code> from the files; bloat goes to a dated archive. The index never grows monotonically.</li>
     </ul>
 
-    <p>The alternative — embeddings in a vector DB — is fine for some workloads but expensive for "what behavioral rule did the operator give me yesterday." Files win on auditability and round-tripping with humans.</p>
+    <h3>Memory write discipline</h3>
+    <p><strong>Hard rule: search before claiming you don't know.</strong> Before saying "I have no context on X," search the memory palace. A 9,000+ entry palace is useless if you don't query it. Skipping this when memories exist is a protocol violation.</p>
+
+    <p><strong>Write targets by type:</strong></p>
+    <table>
+      <tr><th>What</th><th>Where</th></tr>
+      <tr><td>Hard rules / lessons learned</td><td class="mono">LESSONS_LEARNED.md</td></tr>
+      <tr><td>Operational state</td><td class="mono">EOD block in MEMORY.md</td></tr>
+      <tr><td>Durable facts</td><td>Flat-file + memory palace (both — palace alone not read at boot)</td></tr>
+      <tr><td>Project decisions</td><td>Project memory entry + wiki page</td></tr>
+      <tr><td>Session events</td><td class="mono">memory/YYYY-MM-DD.md</td></tr>
+      <tr><td>Important events</td><td>Agent diary (importance ≥ 4)</td></tr>
+    </table>
 
     <div class="callout blue">
       <strong>For teams adopting this</strong>
-      The companion repo includes <code>scripts/memory-init.sh</code> and a <code>memory/</code> skeleton you can drop into any Claude-Code-based project. Same template Nova uses.
+      Start with Layer 0–2 (boot context + flat files + daily log). That's enough for a single agent to maintain continuity across sessions. Add the semantic palace (Layer 3) when you have more than a few dozen memories and fuzzy recall becomes useful. Layers 4–9 are optimizations; earn them.
+    </div>
+
+    <div class="callout blue">
+      <strong>Quickstart</strong>
+      <code>scripts/memory-init.sh path/to/project</code> creates a <code>memory/</code> dir with the canonical template and a starter <code>MEMORY.md</code>. See <code>examples/memory/</code> for working examples of each file type including daily-log, active-tasks, and handoff templates.
     </div>
   </section>
 
@@ -361,15 +491,15 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     </table>
 
     <h3>Worked example: a 12-step feature build</h3>
-    <p>A recent feature (a property-listing hub on a production web app) was built as a 12-step loop:</p>
+    <p>A recent feature build was driven as a 12-step loop:</p>
     <ol>
       <li><code>state.json</code> tracked <code>next_step</code> (1 → 12), per-step done-check results, and any last failure.</li>
-      <li><code>run-step.sh</code> read state, looked up the step contract in <code>dev-spec.md</code>, and invoked Claude with the step contract as the prompt.</li>
+      <li><code>run-step.sh</code> read state, looked up the step contract in <code>dev-spec.md</code>, and invoked the agent with the step contract as the prompt.</li>
       <li><code>handoffs/STEP-N.md</code> were written at the end of each iteration so a fresh agent context could pick up cleanly.</li>
-      <li>The done-check for each step was real: schema validation, <code>curl + grep</code>, type-check exit code, etc. Never "looks good."</li>
+      <li>The done-check for each step was real: schema validation, <code>curl + grep</code>, type-check exit code. Never "looks good."</li>
     </ol>
 
-    <p>Once the feature shipped and the reviewer signed off, the build-harness loop closed and its artifacts were deleted. A separate <em>operational</em> loop — weekly analytics ingest, a research sub-agent, safe changes applied automatically, an audit log — is built as scheduled-job infrastructure rather than a JSON file in the repo. Same pattern, different lifecycle (see the callout below).</p>
+    <p>Once the feature shipped, the build-harness loop closed and its artifacts were deleted. A separate <em>operational</em> loop — periodic analytics ingest, a research sub-agent, safe changes applied automatically, an audit log — is built as scheduled-job infrastructure rather than a JSON file in the repo. Same pattern, different lifecycle.</p>
 
     <div class="callout">
       <strong>Two different loops, often confused</strong>
@@ -379,18 +509,20 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <h3>Why this is worth adopting</h3>
     <ul>
       <li>Multi-iteration work survives context resets. The agent that finishes step 7 doesn't have to be the agent that started step 1.</li>
-      <li>Falsifiable done-checks force you to write the assertion before you write the code. That's the whole TDD thing dressed as a shell script.</li>
+      <li>Falsifiable done-checks force you to write the assertion before you write the code. That's TDD dressed as a shell script.</li>
       <li>One commit per step → readable <code>git log</code>, easy rollback, easy review.</li>
     </ul>
+
+    <p>See <a href="docs/loop-harness-pattern.md"><code>docs/loop-harness-pattern.md</code></a> for the full pattern with worked example, state.json schema, and check-iteration.sh shape.</p>
   </section>
 
   <section id="hermes">
-    <div class="num">06 · Hermes</div>
-    <h2>The substrate: a nightly fleet improver.</h2>
-    <p class="lede">Hermes is the third peer — the cron-driven substrate both Nova and Mira run on top of. It runs while everyone sleeps: watches what the fleet did during the day, decides what to surface next, drafts the asks, and leaves each agent a curated brief to start tomorrow with. Without Hermes the agents would still work — they'd just spend the first hour of each day figuring out what to work on, and nothing would systematically improve the fleet itself.</p>
+    <div class="num">06 · Hermes substrate</div>
+    <h2>The nightly fleet improver.</h2>
+    <p class="lede">Hermes is the substrate both agents run on — a peer, not a worker. It runs while everyone sleeps: watches what the fleet did during the day, decides what to surface next, drafts falsifiable contracts, and leaves each agent a curated brief to start tomorrow with. Without Hermes the agents still work — they'd just spend the first hour figuring out what to work on, and nothing would systematically improve the fleet itself.</p>
 
     <figure style="margin:24px 0;">
-      <img src="/nightly-loop.png" alt="The nightly loop: Hermes cycles through aggregate, plan, contracts, execute, verify, brief." style="width:100%;max-width:560px;height:auto;display:block;margin:0 auto;border:1px solid #e2e2e2;border-radius:10px;" />
+      <img src="/nightly-loop.png" alt="The nightly loop: Hermes cycles through aggregate, plan, contracts, execute, verify, brief." style="width:100%;max-width:560px;height:auto;display:block;margin:0 auto;border:1px solid #e2e2e2;" />
       <figcaption style="font-size:13px;color:#666;margin-top:8px;text-align:center;">The nightly loop. Each stage is a small script; state lives on disk so any stage can re-run on its inputs. Anything unsafe to run alone lands in an approval queue first.</figcaption>
     </figure>
 
@@ -413,7 +545,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
    └──────────┬──────────┘
               ▼
    ┌─────────────────────┐
-   │ qa-verifier + curator│ ← grades outputs, files acceptance, archives misses
+   │ qa-verifier+curator │ ← grades outputs, files acceptance, archives misses
    └──────────┬──────────┘
               ▼
    ┌─────────────────────┐
@@ -424,7 +556,7 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <h3>What lands on disk each night</h3>
     <table>
       <tr><th>Artifact</th><th>What it is</th></tr>
-      <tr><td class="mono">nova-queue.md</td><td>Backlog of contracts waiting for Nova to claim. The "what should I work on" list, ranked.</td></tr>
+      <tr><td class="mono">coordinator-queue.md</td><td>Backlog of contracts waiting for the coordinator to claim. The "what should I work on" list, ranked.</td></tr>
       <tr><td class="mono">contracts/*.json</td><td>One file per work item. Each names: intent, falsifiable success criteria, owner, blocking-on, do-not-touch list.</td></tr>
       <tr><td class="mono">plans/*.md</td><td>Longer-form plans the planner drafted — turned into contracts only when the contract-creator promotes them.</td></tr>
       <tr><td class="mono">preflight-{agent}.md</td><td>"Here's what's on your plate, here's what just broke, here's what's worth your attention" — injected at the start of the agent's next session.</td></tr>
@@ -434,24 +566,24 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
     <h3>Why a pipeline, not a single agent</h3>
     <ul>
       <li><strong>Composable.</strong> Each stage is a small Python or bash script with a single responsibility. New stages bolt in without rewriting the orchestrator.</li>
-      <li><strong>Restartable.</strong> Any stage can re-run on its inputs without re-doing prior stages. The state lives on disk, not in memory.</li>
-      <li><strong>Watchable.</strong> Watchdogs run between stages — <code>stall-watchdog.py</code>, <code>mira-watchdog.py</code>, <code>stakeholder-watcher.sh</code>, <code>business-outcome-probe.sh</code>. They catch problems Hermes itself can't see.</li>
+      <li><strong>Restartable.</strong> Any stage can re-run on its inputs without re-doing prior stages. State lives on disk, not in memory.</li>
+      <li><strong>Watchable.</strong> Watchdogs run between stages and catch problems Hermes itself can't see.</li>
       <li><strong>Cron-friendly.</strong> Stages run on independent schedules. Activity aggregation runs every 15 minutes; the full planner runs nightly; preflight regenerates at 5am.</li>
     </ul>
 
     <h3>The acceptance gate</h3>
-    <p>Contracts that the executor can't safely run alone (anything touching shared state, anything that costs money, anything novel) land in an approval queue rather than executing. The operator approves or rejects from the HTML brain (next section) — one click each — and the contract returns to the pipeline.</p>
+    <p>Contracts the executor can't safely run alone (anything touching shared state, anything that costs money, anything novel) land in an approval queue rather than executing. The operator approves or rejects from the HTML brain (next section) — one click each.</p>
 
     <div class="callout blue">
       <strong>For teams adopting this</strong>
-      The pattern that's portable: <em>nightly cron pipeline that reads activity → drafts work → writes a curated brief</em>. You don't need agents to benefit from this; even a daily "here's what changed in your repos + here's what's open in Linear + here's what merged that might affect you" cron is a useful version of the same idea.
+      The portable pattern: <em>nightly cron pipeline that reads activity → drafts work → writes a curated brief</em>. You don't need agents to benefit. Even a daily "here's what changed in your repos + here's what's open in your tracker + here's what merged that might affect you" cron is a useful version of the same idea.
     </div>
   </section>
 
   <section id="brain">
     <div class="num">07 · HTML brain</div>
     <h2>The operator's window into the fleet.</h2>
-    <p class="lede">Everything Hermes produces is rendered to HTML at <code>mira-artifacts</code> — a private, auth-gated site that the operator opens to see fleet state, approve or reject contracts, read EOD reports, and reference the canonical design system. It's the only persistent UI in the whole system; Telegram is fast, but HTML is browsable.</p>
+    <p class="lede">Everything Hermes produces is rendered to HTML at a private, auth-gated site — the operator opens it to see fleet state, approve or reject contracts, read EOD reports, and reference the canonical design system. It's the only persistent UI in the system; the chat channel is fast, but HTML is browsable.</p>
 
     <h3>What lives there</h3>
     <table>
@@ -460,57 +592,52 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
       <tr><td class="mono">/dashboard/</td><td>Live fleet dashboard. Active agents, in-flight contracts, recent failures.</td></tr>
       <tr><td class="mono">/eod/{date}/</td><td>End-of-day reports — what the fleet shipped, what's pending, what changed.</td></tr>
       <tr><td class="mono">/fleet-{date}.html</td><td>Daily fleet snapshot — header counts, contract burndown, watchdog state.</td></tr>
-      <tr><td class="mono">/briefs/</td><td>Long-form analysis pieces (case briefs, marketing positioning, etc.) — generated by sub-agents.</td></tr>
       <tr><td class="mono">/hermes/</td><td>Hermes pipeline outputs — what was planned vs. what shipped.</td></tr>
-      <tr><td class="mono">/design-system.html</td><td>The Bauhaus design system you're looking at the descendant of right now. Canonical reference for all artifact rendering.</td></tr>
+      <tr><td class="mono">/api/approve</td><td>Bearer-auth approve/reject endpoint for contracts.</td></tr>
+      <tr><td class="mono">/api/health</td><td>Intentionally public health check for uptime monitors.</td></tr>
     </table>
 
     <h3>How approvals work</h3>
     <ol>
       <li>Hermes drops a contract into the approval queue (rendered as a card in the dashboard).</li>
-      <li>Operator opens <code>mira-artifacts</code>, clicks <code>Approve</code> or <code>Reject</code>.</li>
-      <li>An Edge function (<code>/api/approve</code>) validates the bearer token and POSTs the decision back to the fleet decision tunnel.</li>
+      <li>Operator opens the brain site, clicks <code>Approve</code> or <code>Reject</code>.</li>
+      <li>An Edge function validates the bearer token and POSTs the decision back to the fleet decision tunnel.</li>
       <li>The next executor cron picks up the approved contract and runs it.</li>
     </ol>
 
     <h3>Auth</h3>
-    <p>The whole site is gated by Edge Middleware that validates a key in the query string on first visit, sets an HTTP-only cookie good for 90 days, and redirects to a clean URL so the secret never lingers in the address bar. <code>/api/health</code> is intentionally public for uptime monitors. <code>/api/approve</code>, <code>/api/contract-action</code>, and <code>/api/submit</code> require a Bearer token (different from the cookie).</p>
+    <p>The whole site is gated by Edge Middleware that validates a key in the query string on first visit, sets an HTTP-only cookie good for 90 days, and redirects to a clean URL so the secret never lingers in the address bar. <code>/api/health</code> is intentionally public. Mutating endpoints require a Bearer token (different from the cookie).</p>
 
     <h3>How content gets there</h3>
     <ul>
-      <li><strong>Git push.</strong> An agent (Mira, typically) renders HTML to a file under the right subdirectory, commits, pushes. Vercel auto-deploys on push to <code>main</code>. This is the path for anything we want a diff-able history of.</li>
-      <li><strong>Direct API submit.</strong> Vellum (running on a separate machine) POSTs proposed content to <code>/api/submit</code>; it lands in a proposals branch for review rather than going straight to <code>main</code>.</li>
+      <li><strong>Git push.</strong> An agent renders HTML, commits, pushes; Vercel auto-deploys on push to <code>main</code>. This is the path for anything we want a diff-able history of.</li>
+      <li><strong>Direct API submit.</strong> Remote executors POST proposed content to <code>/api/submit</code>; it lands in a proposals branch for review.</li>
       <li><strong>One-shot ephemeral.</strong> <code>vercel --prod</code> from the project dir for artifacts we don't want in git history.</li>
     </ul>
 
-    <div class="callout">
-      <strong>Why a separate site, not a SaaS</strong>
-      The brain is small (a few hundred HTML files, a half-dozen Edge endpoints) and the data sensitivity is real. A static-site deploy with edge auth gives us no shared backend to harden, no third-party SaaS to audit, and no rendering complexity beyond "render markdown / json to HTML and push." Costs roughly nothing per month.
-    </div>
-
     <div class="callout blue">
       <strong>For teams adopting this</strong>
-      You don't need the auth complexity if you start with a public scope. Static-site + nightly cron that renders the day's state to HTML + git push is enough for many "operator wants to see what's happening" use cases. Add Edge auth when you have data that justifies it.
+      Start public: static-site + nightly cron that renders the day's state to HTML + git push. No SaaS, no shared backend. Add Edge auth when you have data that justifies it.
     </div>
   </section>
 
   <section id="coordination">
     <div class="num">08 · Coordination</div>
     <h2>Two agents on one host, no message bus.</h2>
-    <p class="lede">Nova and Mira don't call each other. They share a filesystem and the human operator. That's it. Surprisingly robust for the work they do together.</p>
+    <p class="lede">Mira and the peer specialist don't call each other. They share a filesystem and the human operator. That's it. Surprisingly robust for the work they do together.</p>
 
     <h3>Shared paths</h3>
-    <pre><code>~/.openclaw/workspace/
-  memory/                            # symmetric memory store (both agents walk it)
+    <pre><code>~/.openclaw/workspace/          # or your equivalent shared workspace root
+  memory/                       # symmetric memory store (both agents walk it)
   handoff-YYYY-MM-DD-{from}-to-{to}.md   # file-based async handoffs
-  hermes-fleet-improver/             # shared nightly improvement pipeline
-  intelligence/                      # shared data: SEO, monitoring, etc.</code></pre>
+  fleet-improver/               # shared nightly improvement pipeline
+  intelligence/                 # shared data: analytics, monitoring, etc.</code></pre>
 
     <h3>How a handoff looks in practice</h3>
     <ol>
-      <li>Mira finishes a YouTube production batch. Writes a handoff file naming what shipped and what's open.</li>
-      <li>Operator sees the handoff (via daily digest) and routes the next move to Nova.</li>
-      <li>Nova reads the handoff, picks up the open thread, writes its own response handoff when done.</li>
+      <li>One agent finishes a batch. Writes a handoff file naming what shipped and what's open.</li>
+      <li>Operator sees the handoff (via daily digest) and routes the next move to the other agent.</li>
+      <li>Receiving agent reads the handoff, picks up the open thread, writes its own response handoff when done.</li>
     </ol>
 
     <p>No locks. No queues. No retry semantics. Two cooperating peers writing files in a shared directory.</p>
@@ -519,84 +646,85 @@ Cross-link other memories: [[other-memory-slug]]</code></pre>
 
     <div class="callout blue">
       <strong>For teams adopting this</strong>
-      If you wanted to add a third agent to this pattern, you'd add a directory and a memory namespace. You wouldn't add a message bus. Stay flat for as long as it stays useful.
+      If you wanted to add a third agent to this pattern, you'd add a directory and a memory namespace. You wouldn't add a message bus. Stay flat for as long as it stays useful. See <a href="docs/coordination.md"><code>docs/coordination.md</code></a> for when you'd need to graduate to real coordination primitives.
     </div>
   </section>
 
   <section id="watchdog">
     <div class="num">09 · Heartbeat &amp; watchdog</div>
     <h2>Noticing when the agent is broken.</h2>
-    <p class="lede">Long-running agents fail in quiet ways. The MCP subprocess dies but the parent keeps running. The model returns text to the terminal instead of Telegram. State drifts. You need an explicit liveness signal and an explicit watchdog.</p>
+    <p class="lede">Long-running agents fail in quiet ways. The MCP subprocess dies but the parent keeps running. The model returns text to the terminal instead of the channel. State drifts. You need an explicit liveness signal and an explicit watchdog.</p>
 
     <h3>The pattern</h3>
     <ol>
-      <li><strong>Heartbeat stamp.</strong> Every time the agent replies on Telegram, it runs <code>date +%s &gt; ~/.claude/nova-telegram-last-msg.txt</code>. The PTY runner also stamps on detected output as a safety net.</li>
+      <li><strong>Heartbeat stamp.</strong> Every time the agent replies on the channel, it runs <code>date +%s &gt; ~/.claude/agent-last-output.txt</code>. The PTY runner also stamps on detected output as a safety net.</li>
       <li><strong>Watchdog cron.</strong> A separate process polls the stamp file. If the timestamp is older than threshold AND there's been an inbound message since the last reply, it fires.</li>
-      <li><strong>Watchdog action.</strong> First action is a Telegram alert to the operator. Restart is operator-initiated, not automatic — auto-restarting masks the root cause.</li>
+      <li><strong>Watchdog action.</strong> First action is an alert to the operator. Restart is operator-initiated, not automatic — auto-restarting masks the root cause.</li>
     </ol>
 
     <h3>What we count as resource pressure</h3>
-    <p>SIGTERM clusters on this host have historically tracked process count. The current contracts (open as of last review):</p>
-    <ul>
-      <li>Pull <code>ps aux | wc -l</code> at every SIGTERM event going forward.</li>
-      <li>Audit and prune orphaned UID-501 processes (the user's UID).</li>
-      <li>Sub-agent spawn gate: halt new sub-agent spawns when process count crosses threshold (TBD — baseline still being measured).</li>
-    </ul>
+    <p>Host resource pressure incidents have historically correlated with <em>agent-owned process count</em>, not total host process count. The right threshold is gated on the axis you control: agent-owned processes, not whatever desktop apps the operator happens to have open.</p>
 
     <p>None of this is rocket science. The point is that you write down "how do I notice when this is broken" as code, not as a vibe.</p>
+
+    <p>See <a href="scripts/heartbeat-watchdog.sh"><code>scripts/heartbeat-watchdog.sh</code></a> for a reference implementation.</p>
   </section>
 
   <section id="repo">
     <div class="num">10 · Companion repo</div>
     <h2>What's in the GitHub repo.</h2>
-    <p class="lede">A scaffold an engineer can clone to start building something similar. Not the live Nova — the live Nova has personal data, project lists, and credentials that don't belong in a public repo. Just the patterns.</p>
+    <p class="lede">A scaffold an engineer can clone to start building something similar. Not a live fleet — a live fleet has private data, project lists, and credentials that don't belong in a public repo. Just the patterns, sanitized and transferable.</p>
 
     <h3>Tree</h3>
-    <pre><code>nova-fleet-overview/
-├── README.md                         # this document, in markdown
-├── public/index.html                 # the HTML you're reading
-├── vercel.json                       # static-site deploy config
+    <pre><code>mira-fleet-architecture/
+├── README.md                          # canonical reference
+├── public/index.html                  # this page
+├── vercel.json                        # static-site deploy config
 │
 ├── scripts/
-│   ├── nova-pty-runner.py            # the PTY supervisor (sanitized)
-│   ├── nova-restart.sh               # launchctl kickstart pattern
-│   ├── memory-init.sh                # drop a memory skeleton into a project
-│   └── heartbeat-watchdog.sh         # the watchdog pattern
+│   ├── agent-pty-runner.py            # PTY supervisor (generic)
+│   ├── agent-restart.sh               # launchctl kickstart pattern
+│   ├── memory-init.sh                 # drop a memory skeleton into a project
+│   ├── heartbeat-watchdog.sh          # watchdog pattern
+│   └── privacy-scan.sh                # scan for sensitive terms before commit
 │
 ├── docs/
-│   ├── process-model.md              # §2 in long form
-│   ├── memory-template.md            # canonical memory frontmatter
-│   ├── loop-harness-pattern.md       # §5 in long form
-│   └── coordination.md               # §6 in long form
-│
-├── .claude/
-│   └── skills/
-│       └── loop-harness/
-│           └── SKILL.md              # invocable skill for the loop+harness pattern
+│   ├── process-model.md               # process tree, restart, gotchas
+│   ├── memory-architecture.md         # full 10-layer memory architecture
+│   ├── loop-harness-pattern.md        # full pattern with worked example
+│   ├── coordination.md                # file-based handoff conventions
+│   └── privacy-checklist.md           # what to check before any public commit
 │
 ├── examples/
-│   ├── launchd-plist/
-│   │   └── com.example.agent.plist   # template LaunchAgent
+│   ├── launchd-plist/com.example.agent.plist
 │   └── memory/
-│       ├── MEMORY.md                 # index template
-│       ├── feedback_example.md       # one of each frontmatter type
+│       ├── MEMORY.md
+│       ├── feedback_example.md
 │       ├── project_example.md
-│       └── reference_example.md
+│       ├── reference_example.md
+│       ├── daily-log.md
+│       ├── active-tasks.md
+│       └── handoff-template.md
 └── .gitignore</code></pre>
 
-    <p>None of the scripts contain credentials or chat IDs. The PTY runner is sanitized to its essential pattern. The memory examples are made-up.</p>
+    <p>None of the scripts contain credentials or private identifiers. The PTY runner is generic. The memory examples are illustrative templates.</p>
 
-    <p>The bootstrap is deliberately low-ceremony: if you have access to the repo, you hand it and a one-paragraph prompt to a fresh Claude Code agent and let it stand up the starter fleet for you. Something like:</p>
+    <h3>Transferable quickstart</h3>
+    <p>Clone the repo and hand it plus a brief prompt to a fresh Claude Code agent:</p>
 
-    <pre><code>Read the nova-fleet-overview companion repo at &lt;repo-url&gt;.
-In a new directory, set me up a single persistent agent on this
-pattern: a launchd + PTY runner so it survives terminal close, a
-file-based memory/ dir with the synthesizer, the loop+harness
-skill, and a heartbeat stamp + watchdog. Skip the second agent and
-the OpenClaw side for now — one agent, the plumbing, nothing I have
-to reverse-engineer. Tell me what to fill in (tokens, paths) as you go.</code></pre>
+    <pre><code>Read the Mira Fleet Architecture companion repo at &lt;repo-url&gt;.
 
-    <p>That's the whole point of writing this down: the patterns are portable, and the repo plus a prompt is enough to start. How far you get is gated only by who has access to the repo.</p>
+In a new directory, set me up a single persistent agent:
+- launchd + PTY runner so it survives terminal close
+- file-based memory/ dir with the synthesizer
+- the loop+harness skill
+- a heartbeat stamp + watchdog cron
+
+Skip the second agent and the OpenClaw side for now — one agent,
+the plumbing, nothing I have to reverse-engineer. Tell me what to
+fill in (tokens, paths, launchd label) as you go.</code></pre>
+
+    <p>That's the whole point of writing this down: the patterns are portable, and the repo plus a prompt is enough to start.</p>
   </section>
 
   <section id="adopt">
@@ -609,20 +737,20 @@ to reverse-engineer. Tell me what to fill in (tokens, paths) as you go.</code></
         <h4>Worth adopting</h4>
         <ul>
           <li><strong>The loop+harness pattern.</strong> Universal. Doesn't require Claude — works with any agent or even a human iterating.</li>
-          <li><strong>File-based memory with synthesizer.</strong> Cheap, auditable, round-trips with humans.</li>
+          <li><strong>Layered memory architecture.</strong> Start with boot context + flat files; add semantic palace when you have scale to justify it.</li>
           <li><strong>launchd + PTY for long-running agents.</strong> Mac-specific but conceptually portable (systemd + pty on Linux).</li>
           <li><strong>Heartbeat + watchdog discipline.</strong> Cheap insurance against quiet failures.</li>
           <li><strong>Hermes-style nightly pipeline.</strong> Even without agents, a nightly "read activity → draft work → write a brief" cron beats starting every day from scratch.</li>
-          <li><strong>HTML brain.</strong> A static-site + edge-auth + nightly render is enough for a real operator UI. No SaaS, no shared backend.</li>
+          <li><strong>HTML brain.</strong> Static-site + edge-auth + nightly render is enough for a real operator UI.</li>
         </ul>
       </div>
       <div class="card red">
-        <h4>Probably not worth lifting</h4>
+        <h4>Probably not worth lifting first</h4>
         <ul>
-          <li><strong>Two peer agents on one host.</strong> Only makes sense if you have two distinct workload personalities and a single human operator. Otherwise it's complexity for its own sake.</li>
-          <li><strong>OpenClaw gateway (Mira's side).</strong> Useful for our shape, more than most teams need.</li>
-          <li><strong>The agent buddies Telegram group.</strong> Operator UX for our specific cadence. You'd build your own.</li>
-          <li><strong>Watchdog count (we run a lot).</strong> Start with one heartbeat + one watchdog. Earn the rest.</li>
+          <li><strong>Two peer agents on one host.</strong> Only makes sense if you have two distinct workload personalities and a single human operator.</li>
+          <li><strong>OpenClaw gateway.</strong> Useful for this fleet's shape; more than most teams need to start.</li>
+          <li><strong>All 9 watchdogs.</strong> Start with one heartbeat + one watchdog. Earn the rest.</li>
+          <li><strong>Full semantic palace.</strong> Add after flat-file layer is working. The palace is a force-multiplier, not a starting point.</li>
         </ul>
       </div>
     </div>
@@ -635,32 +763,30 @@ to reverse-engineer. Tell me what to fill in (tokens, paths) as you go.</code></
       <li>Run it. Notice that the agent (or you) can resume after any interruption without re-deriving where you were.</li>
       <li>Decide whether the rest of the fleet pattern is worth adopting.</li>
     </ol>
-
-    <p>If you do want to adopt more — the companion repo is the place to start, and Nova is available for pairing on Slack.</p>
   </section>
 
   <section id="lessons">
     <div class="num">12 · Operating principles</div>
     <h2>The principles that keep it standing.</h2>
-    <p class="lede">The architecture above is the easy half. The hard half is the handful of principles that keep a persistent fleet from quietly rotting — the failure modes that show up under real load, and the guardrails that answer them. This is the spine of the system; if the rest of the document is the body, this is what holds it upright. Cheap to copy, expensive to learn.</p>
+    <p class="lede">The architecture above is the easy half. The hard half is the handful of principles that keep a persistent fleet from quietly rotting — the failure modes that show up under real load, and the guardrails that answer them. This is the spine of the system. Cheap to copy, expensive to learn.</p>
 
     <h3>Pick the metric that tracks <em>your</em> contribution, not the noisy aggregate.</h3>
-    <p>The fleet kept getting killed by host resource pressure. The first instinct was to gate on total process count — but that number is dominated by whatever desktop apps the operator happens to have open, so it tripped during normal work and missed real spikes. The signal that actually correlated with every incident was the count of processes the <em>agents</em> own. Gate on the axis you control, not the one that looks scary. A threshold on the wrong metric is worse than no threshold; it trains you to ignore the alarm.</p>
+    <p>The fleet kept getting killed by host resource pressure. The first instinct was to gate on total process count — but that number is dominated by whatever desktop apps the operator happens to have open. The signal that actually correlated with every incident was the count of processes the <em>agents</em> own. Gate on the axis you control. A threshold on the wrong metric is worse than no threshold; it trains you to ignore the alarm.</p>
 
     <h3>When you ingest human feedback, read the surface humans actually use.</h3>
-    <p>A watcher that collected feedback from a Slack channel pulled <code>conversations.history</code> and silently dropped every threaded reply — which is exactly where people were leaving their feedback. It looked like it was working (it appended messages, it had a checkpoint) while missing most of the input. Lesson: a pipeline that reads the wrong surface fails <em>quietly</em>. Verify you're capturing the channel people actually talk in, and test it with a real reply, not a synthetic one.</p>
+    <p>A watcher that collected feedback from a messaging channel pulled the main history and silently dropped every threaded reply — which is exactly where people were leaving their feedback. It looked like it was working while missing most of the input. A pipeline that reads the wrong surface fails <em>quietly</em>. Verify you're capturing the channel people actually talk in, and test it with a real reply.</p>
 
     <h3>Never trust a status field. Verify the artifact it describes.</h3>
-    <p>A pipeline reported "revision applied" on a document while the live document still had the old text. Elsewhere a job stamped a record "done" when the real work never ran. Status fields lie — they record intent, not outcome. The fix is boring and universal: before you believe "done," read the thing it claims to have changed. We now diff the live artifact, not the flag.</p>
+    <p>A pipeline reported "revision applied" while the live document still had the old text. Status fields record intent, not outcome. Before you believe "done," read the thing it claims to have changed. We now diff the live artifact, not the flag.</p>
 
     <h3>Encode the rule at the gate, once. Don't rely on catching it each time.</h3>
-    <p>As more content started flowing through the fleet, the standards multiplied: style rules, voice-per-author, hard confidentiality lines (never expose a partner relationship in public material). Enforcing those by review-every-time doesn't scale and fails the one time attention slips. So they became hard-fail gates in the pipeline — a draft that violates one can't reach "ready," and a later edit can't quietly reintroduce it. Turn your most important "remember to…" into a check that runs whether or not anyone remembers.</p>
+    <p>As more content started flowing through the fleet, the standards multiplied: style rules, voice-per-author, hard confidentiality lines. Enforcing those by review-every-time doesn't scale and fails the one time attention slips. They became hard-fail gates in the pipeline — a draft that violates one can't reach "ready." Turn your most important "remember to…" into a check that runs whether or not anyone remembers.</p>
 
     <h3>Loops and harnesses are the default, not the exception.</h3>
-    <p>Loop+harness (§5) isn't just for big multi-step work; it's the default for almost anything non-trivial. Write the falsifiable check first, change the artifact, keep the change only if the check improves, revert on regression. The discipline of stating the assertion up front catches more than the iteration loop itself does. The reflex — reach for a harness before editing — turns out to be the bottleneck, not the tooling.</p>
+    <p>Loop+harness (§5) isn't just for big multi-step work; it's the default for almost anything non-trivial. Write the falsifiable check first, change the artifact, keep the change only if the check improves, revert on regression. The reflex — reach for a harness before editing — turns out to be the bottleneck, not the tooling.</p>
 
     <h3>This single host is the proving ground, not the destination.</h3>
-    <p>Everything in §1–§11 runs on one Mac mini with two peers. That's deliberate: it's the cheapest place to learn the patterns. The next step is lifting them into a multi-tenant cloud platform — department-scoped agents, a shared memory service that enforces a structured-summary privacy contract (agents write summaries, never raw data, and the conductor only reads the summaries), per-agent identity at the gateway, and the nightly improver running as a managed job instead of a laptop cron. The architecture here is the rehearsal. The interfaces — file memory, loop+harness, heartbeat, the brief pipeline — are what survive the move; the single-host plumbing is what gets replaced.</p>
+    <p>Everything in §1–§11 runs on one host with two or three peers. That's deliberate: it's the cheapest place to learn the patterns. The next step is lifting them into a multi-tenant platform — department-scoped agents, a shared memory service, per-agent identity at the gateway, and the nightly improver running as a managed job. The interfaces — file memory, loop+harness, heartbeat, the brief pipeline — are what survive the move; the single-host plumbing is what gets replaced.</p>
 
     <div class="callout blue">
       <strong>The throughline</strong>
@@ -669,7 +795,7 @@ to reverse-engineer. Tell me what to fill in (tokens, paths) as you go.</code></
   </section>
 
   <footer>
-    Nova Fleet · v2 · 2026-05-29 · Built for teams running long-lived agents · Source on GitHub
+    Mira Fleet Architecture · v3 · 2026-06-18 · A sanitized public reference for long-lived agent systems · <a href="https://github.com/your-org/mira-fleet-architecture" style="color:inherit">Source on GitHub</a>
   </footer>
 
 </main>

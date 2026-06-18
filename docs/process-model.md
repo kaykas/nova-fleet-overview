@@ -9,9 +9,9 @@ Claude's interactive mode, and a clean restart story.
 
 ```
 launchd (com.example.agent)              ← user-level LaunchAgent
-  └─ python3 nova-pty-runner.py          ← PTY supervisor
+  └─ python3 agent-pty-runner.py         ← PTY supervisor
        └─ claude --dangerously-skip-permissions \
-                 --channels plugin:telegram@claude-plugins-official
+                 --channels plugin:YOUR_CHANNEL_PLUGIN
             └─ bun                       ← MCP subprocess(es)
 ```
 
@@ -32,8 +32,8 @@ dependency on a tmux server staying alive, and the tmux server died sometimes
 plugin; inbound messages from that channel arrive in the agent's context as
 `<channel>` blocks.
 
-**bun MCP subprocess** — runtime for local MCP plugins (Telegram, in our
-case). It's a child of the Claude process, not the runner. If it dies, the
+**bun MCP subprocess** — runtime for local MCP plugins (e.g. a messaging
+channel). It's a child of the Claude process, not the runner. If it dies, the
 Claude process stays alive but the channel goes mute. Known failure mode.
 
 ## Sample launchd plist
@@ -60,8 +60,8 @@ job is already running.
 ## Inspect
 
 ```bash
-pgrep -fl nova-pty-runner.py
-pgrep -P $(pgrep -f nova-pty-runner) | xargs -I{} ps -fp {}
+pgrep -fl agent-pty-runner.py
+pgrep -P $(pgrep -f agent-pty-runner) | xargs -I{} ps -fp {}
 ```
 
 ## Known failure modes
@@ -70,7 +70,7 @@ pgrep -P $(pgrep -f nova-pty-runner) | xargs -I{} ps -fp {}
 |----------------------------------------------|--------------------------------------------------------|-----------------------------------------------|
 | Agent stops replying on channel               | bun MCP subprocess died silently                       | `launchctl kickstart -k` (tears down tree)    |
 | Agent output appears in terminal, not channel | Channel binding lost; MCP plugin not in active list    | Restart; verify plugin in `--channels` flag   |
-| Agent up but channel reports "no recent activity" | MCP subprocess can't reach Telegram API                | Check bot token in plist `EnvironmentVariables` |
+| Agent up but channel reports "no recent activity" | MCP subprocess can't reach channel API              | Check token in plist `EnvironmentVariables`   |
 | launchd respawns infinitely (rapid loop)      | Child exiting too quickly; missing arg or auth        | Check `StandardErrorPath`; add `ThrottleInterval` |
 
 ## Conceptual port to Linux

@@ -2,9 +2,8 @@
 """
 PTY supervisor for a long-running Claude Code process.
 
-Sanitized version of the Nova runner — channel binding, command-line flags,
-and process names removed. Drop this in, fill in your own command + channel,
-and supervise via launchd / systemd.
+A generic PTY runner for any agent that needs a real terminal. Drop this in,
+fill in your own COMMAND + channel flags, and supervise via launchd / systemd.
 
 What it does:
   1. Allocates a real pseudo-terminal (Claude wants a real TTY in interactive
@@ -34,7 +33,7 @@ from pathlib import Path
 COMMAND = [
     "claude",
     "--dangerously-skip-permissions",
-    # "--channels", "plugin:telegram@claude-plugins-official",
+    # "--channels", "plugin:YOUR_CHANNEL_PLUGIN",
     # add your own channel(s) here
 ]
 HEARTBEAT_FILE = Path.home() / ".claude" / "agent-last-output.txt"

@@ -31,7 +31,7 @@
   <array>
     <string>/usr/bin/env</string>
     <string>python3</string>
-    <string>{{HOME}}/path/to/scripts/nova-pty-runner.py</string>
+    <string>{{HOME}}/path/to/scripts/agent-pty-runner.py</string>
   </array>
 
   <key>EnvironmentVariables</key>

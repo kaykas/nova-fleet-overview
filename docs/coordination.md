@@ -1,13 +1,14 @@
 # Coordination — Two Agents, One Host, No Message Bus
 
-Nova and Mira are peers. They don't call each other. They share a filesystem
-and the human operator. Surprisingly robust for the work they do together.
+The coordinator agent (Mira) and a peer specialist agent are long-running peers.
+They don't call each other. They share a filesystem and the human operator.
+Surprisingly robust for the work they do together.
 
 ## Shared filesystem layout
 
 ```
-~/.openclaw/workspace/
-├── memory/                              # symmetric memory store; both agents walk it
+~/.openclaw/workspace/          # or your equivalent shared workspace root
+├── memory/                     # symmetric memory store; both agents walk it
 │   ├── MEMORY.md
 │   ├── feedback_*.md
 │   ├── project_*.md
@@ -16,13 +17,12 @@ and the human operator. Surprisingly robust for the work they do together.
 │
 ├── handoff-{date}-{from-agent}-to-{to-agent}.md  # async handoff
 │
-├── intelligence/                        # shared data: SEO, monitoring, etc.
+├── intelligence/               # shared data: analytics, monitoring, etc.
 │   ├── agent-health.json
-│   ├── daily-revenue-summary.json
 │   └── …
 │
-└── hermes-fleet-improver/               # shared nightly improvement pipeline
-    ├── nova-queue.md                    # work Mira would like Nova to consider
+└── fleet-improver/             # shared nightly improvement pipeline
+    ├── coordinator-queue.md    # work the coordinator would like the peer to consider
     └── scripts/
 ```
 
@@ -66,7 +66,7 @@ if you have a human who reads diffs.
 
 ## When you'd need a real coordination layer
 
-- Agents that need to race for the same work (you have one).
+- Agents that need to race for the same work item.
 - Agents that mutate shared state with strict ordering (e.g., a shared
   counter, a shared queue with at-least-once semantics).
 - Agents without a human routing layer.

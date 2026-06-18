@@ -20,20 +20,20 @@ writing the done-check before the code, not the framework.
 
 ```json
 {
-  "feature": "property-hub-claremont",
+  "feature": "content-ingestion-pipeline",
   "phase": 1,
-  "steps_total": 12,
-  "next_step": 7,
-  "completed_steps": [1, 2, 3, 4, 5, 6],
-  "last_run_at": "2026-05-15T18:34:00Z",
+  "steps_total": 8,
+  "next_step": 3,
+  "completed_steps": [1, 2],
+  "last_run_at": "2026-01-15T18:34:00Z",
   "last_done_check_results": {
-    "step_6": "pass",
-    "details": "FAQPage schema renders, 6 questions present, jsonld valid"
+    "step_2": "pass",
+    "details": "Schema renders, 6 items present, jsonld valid"
   },
   "last_failure": null,
   "open_questions": [
-    "Q7: confirm DB property record uses post-rebrand name",
-    "Q9: BWT account access + verification token on prod"
+    "Q4: confirm DB record uses post-migration field names",
+    "Q6: verify staging token in environment config"
   ]
 }
 ```
@@ -60,18 +60,18 @@ STEP="$(jq -r .next_step state.json)"
 
 case "${STEP}" in
   1)
-    test -f apps/web-next/src/app/properties/[id]/page.tsx
+    test -f src/app/routes/my-feature/page.tsx
     ;;
   2)
-    # JSON-LD on the rendered page contains LodgingBusiness schema
-    curl -fsSL "${PREVIEW_URL}/properties/4042" \
-      | grep -q '"@type":"LodgingBusiness"'
+    # JSON-LD on the rendered page contains the expected schema type
+    curl -fsSL "${PREVIEW_URL}/my-feature/example-item" \
+      | grep -q '"@type":"ExpectedSchemaType"'
     ;;
   3)
-    # FAQ schema renders ≥6 questions
-    N=$(curl -fsSL "${PREVIEW_URL}/properties/4042" \
-        | grep -o '"@type":"Question"' | wc -l)
-    [ "${N}" -ge 6 ]
+    # Schema renders with required fields
+    N=$(curl -fsSL "${PREVIEW_URL}/my-feature/example-item" \
+        | grep -o '"@type":"RequiredSubType"' | wc -l)
+    [ "${N}" -ge 3 ]
     ;;
   # … more steps …
 esac
@@ -109,30 +109,30 @@ else
 fi
 ```
 
-## Worked example: feat/property-hub-loop
+## Worked example: a 12-step feature build
 
-Phase 1 of the Property Hub feature in saleshub was built as a 12-step loop:
+A typical web-feature build broken into a 12-step loop:
 
 | Step | Done-check                                                  |
 |------|-------------------------------------------------------------|
 | 1    | route file exists, type-check green                         |
-| 2    | LodgingBusiness JSON-LD in HTML                             |
-| 3    | FAQPage schema, ≥6 questions                                |
+| 2    | JSON-LD schema type in rendered HTML                        |
+| 3    | Structured data sub-type renders ≥N items                   |
 | 4    | meta + OG tags present, og:image is a valid URL             |
-| 5    | dual CTA renders (direct booking + lead-gen)                |
-| 6    | sameAs entity links present, each URL resolves              |
-| 7    | robots.txt has train-vs-cite split                          |
+| 5    | dual CTA renders correctly                                  |
+| 6    | entity links present, each URL resolves                     |
+| 7    | robots.txt updated                                          |
 | 8    | IndexNow endpoint responds 200                              |
-| 9    | Bing Webmaster verification meta tag in head                |
-| 10   | GA4 dataLayer initializes with AI-referrer channel group    |
-| 11   | CWV budget green (LCP < 2.5s, no lazy on hub render path)   |
+| 9    | Verification meta tag in head                               |
+| 10   | Analytics dataLayer initializes with expected channel group |
+| 11   | Core Web Vitals budget green (LCP < 2.5s)                   |
 | 12   | demo gate — human review before Phase 2 expansion           |
 
 When Phase 1 shipped, the build harness closed: `state.json`,
 `run-next-iteration.sh`, and the per-step handoffs were deleted. They were
-build tracking, not the operational product. The B9 *operational* loop
-(weekly GSC + GA4 ingest, research subagent, safe-changes applied, audit log)
-is separate Phase 4 work — same pattern, different lifecycle, built as
+build tracking, not the operational product. The *operational* loop (weekly
+analytics ingest, research subagent, safe-changes applied, audit log) is
+separate Phase 2 work — same pattern, different lifecycle, built as
 scheduled-job infrastructure instead of a JSON file in the repo.
 
 ## When NOT to use this pattern
